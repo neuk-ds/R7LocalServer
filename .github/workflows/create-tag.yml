@@ -48,3 +48,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Run release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh workflow run release.yml \
+            --ref "${{ steps.version.outputs.tag }}" \
+            -f tag="${{ steps.version.outputs.tag }}"
