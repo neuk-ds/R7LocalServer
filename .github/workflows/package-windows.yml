@@ -5,6 +5,8 @@ on:
   push:
     tags:
       - 'v*'
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   package-windows:
@@ -12,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -27,7 +29,7 @@ jobs:
         run: .\gradlew.bat :composeApp:createDistributable
 
       - name: Upload Windows app folder
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: R7LocalServer-windows-app
           path: composeApp/build/compose/binaries/main/app/R7LocalServer
