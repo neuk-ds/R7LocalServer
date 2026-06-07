@@ -1,0 +1,33 @@
+name: Package Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Create distributable
+        run: .\gradlew.bat :composeApp:createDistributable
+
+      - name: Upload Windows app folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: R7LocalServer-windows-app
+          path: composeApp/build/compose/binaries/main/app/R7LocalServer
