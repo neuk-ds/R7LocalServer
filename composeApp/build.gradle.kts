@@ -1,6 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-val applicationVersion = "2.2.1"
+val applicationVersion = "2.2.3"
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info/kotlin")
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
