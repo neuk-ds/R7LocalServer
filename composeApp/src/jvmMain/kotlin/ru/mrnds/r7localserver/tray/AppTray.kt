@@ -1,5 +1,6 @@
 package ru.mrnds.r7localserver.tray
 
+import org.slf4j.LoggerFactory
 import java.awt.SystemTray
 import java.awt.Toolkit
 import java.awt.TrayIcon
@@ -11,9 +12,11 @@ class AppTray(
     private val onOpenMainWindow: () -> Unit,
     private val onOpenTrayPanel: () -> Unit,
 ) {
+    private val logger = LoggerFactory.getLogger(AppTray::class.java)
     private var trayIcon: TrayIcon? = null
 
     fun install() {
+        logger.info("Installing tray. SystemTray supported={}", SystemTray.isSupported())
         if (!SystemTray.isSupported()) {
             return
         }
@@ -25,7 +28,35 @@ class AppTray(
             isImageAutoSize = true
             addMouseListener(
                 object : MouseAdapter() {
+                    override fun mousePressed(e: MouseEvent) {
+                        logger.info(
+                            "Tray mouse pressed: button={}, clickCount={}, popupTrigger={}",
+                            e.button,
+                            e.clickCount,
+                            e.isPopupTrigger
+                        )
+                    }
+
+                    override fun mouseReleased(e: MouseEvent) {
+                        logger.info(
+                            "Tray mouse released: button={}, clickCount={}, popupTrigger={}",
+                            e.button,
+                            e.clickCount,
+                            e.isPopupTrigger
+                        )
+
+                        if (e.isPopupTrigger || SwingUtilities.isRightMouseButton(e)) {
+                            onOpenTrayPanel()
+                        }
+                    }
+
+
                     override fun mouseClicked(e: MouseEvent) {
+                        logger.info(
+                            "Tray mouse clicked: button={}, clickCount={}",
+                            e.button,
+                            e.clickCount
+                        )
                         when {
                             SwingUtilities.isRightMouseButton(e) -> {
                                 onOpenTrayPanel()
@@ -37,11 +68,13 @@ class AppTray(
                         }
 
                     }
+
                 }
 
             )
         }
         SystemTray.getSystemTray().add(trayIcon)
+        logger.info("Tray icon installed")
     }
 
     fun updateTooltip(text: String) {
