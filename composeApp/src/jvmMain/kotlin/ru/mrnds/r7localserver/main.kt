@@ -4,11 +4,15 @@ package ru.mrnds.r7localserver
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.*
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import org.jetbrains.compose.resources.painterResource
 import r7localserver.composeapp.generated.resources.Res
 import r7localserver.composeapp.generated.resources.icon
 import ru.mrnds.r7localserver.platform.AppDirectories
+import ru.mrnds.r7localserver.platform.Platform
 import ru.mrnds.r7localserver.tray.AppTray
 import ru.mrnds.r7localserver.ui.App
 import ru.mrnds.r7localserver.ui.widgets.TrayPanel
@@ -64,7 +68,7 @@ fun main() {
             }
 
             LaunchedEffect(windowState.isMinimized) {
-                if (windowState.isMinimized) {
+                if (windowState.isMinimized && !Platform.isLinux) {
                     isWindowVisible = false
                     windowState.isMinimized = false
                 }
@@ -89,9 +93,7 @@ fun main() {
                                 isTrayPanelVisible = false
                             }
                         }
-
                         window.addWindowFocusListener(listener)
-
                         onDispose {
                             window.removeWindowFocusListener(listener)
                         }
@@ -113,7 +115,15 @@ fun main() {
             Window(
                 visible = isWindowVisible,
                 onCloseRequest = {
-                    isWindowVisible = false
+                    if (viewModel.serverBusy || viewModel.serverRunning) {
+                        if (Platform.isLinux) {
+                            windowState.isMinimized = true
+                        } else {
+                            isWindowVisible = false
+                        }
+                    } else {
+                        exitApplication()
+                    }
                 },
                 title = "R7 Local Server",
                 icon = appIcon,
