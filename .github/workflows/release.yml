@@ -40,11 +40,25 @@ jobs:
       - name: Build Windows installer
         run: .\gradlew.bat :composeApp:packageInnoSetup
 
-      - name: Upload Windows artifact
+      - name: Create Windows app zip
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive `
+            -Path composeApp/build/compose/binaries/main/app/R7LocalServer `
+            -DestinationPath dist/R7LocalServer-windows.zip `
+            -Force
+
+      - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v5
         with:
           name: windows-installer
           path: composeApp/build/inno/*.exe
+
+      - name: Upload Windows zip artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-zip
+          path: dist/R7LocalServer-windows.zip
 
   linux:
     runs-on: ubuntu-latest
