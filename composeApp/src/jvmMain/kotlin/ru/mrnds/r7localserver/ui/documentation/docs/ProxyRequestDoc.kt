@@ -7,7 +7,7 @@ val proxyRequestDoc = EndpointDoc(
     title = "Проксирование запроса",
     method = "POST",
     path = "/proxy/request",
-    description = "Отправляет HTTP-запрос на сторонний сервер и возвращает статус, заголовки и тело ответа.",
+    description = "Отправляет HTTP-запрос на сторонний сервер и возвращает статус, заголовки и тело ответа. CORS для клиента добавляет локальный сервер.",
     requestExample = """
         {
           "url": "https://example.com/api/data",
@@ -16,8 +16,10 @@ val proxyRequestDoc = EndpointDoc(
             "Accept": "application/json"
           },
           "body": null,
+          "authType": "NONE",
           "username": null,
           "password": null,
+          "domain": null,
           "ignoreSslErrors": false
         }
     """.trimIndent(),
@@ -35,9 +37,16 @@ val proxyRequestDoc = EndpointDoc(
         "method - необязательное поле. HTTP-метод; значение по умолчанию GET.",
         "headers - необязательное поле. Заголовки для проксируемого запроса; значение по умолчанию пустой объект.",
         "body - необязательное поле. Тело запроса строкой; значение по умолчанию null.",
-        "username - необязательное поле. Логин для Basic-авторизации; значение по умолчанию null.",
-        "password - необязательное поле. Пароль для Basic-авторизации; значение по умолчанию null.",
+        "authType - необязательное поле. Тип авторизации; значение по умолчанию NONE. Возможные значения: NONE, BASIC, NTLM, NEGOTIATE.",
+        "username - необязательное поле. Логин для BASIC или NTLM. Для BASIC и NTLM становится обязательным.",
+        "password - необязательное поле. Пароль для BASIC или NTLM. Для BASIC и NTLM становится обязательным.",
+        "domain - необязательное поле. Домен Windows/Active Directory для NTLM. Для NTLM становится обязательным.",
         "ignoreSslErrors - необязательное поле. Если true, прокси не проверяет HTTPS-сертификат целевого сервера; значение по умолчанию false. Использовать только для тестов и внутренних серверов.",
-        "Заголовки host, content-length и connection не проксируются."
+        "authType NONE - запрос отправляется без авторизации.",
+        "authType BASIC - используется Basic-авторизация через username/password.",
+        "authType NTLM - используется NTLM-авторизация через username/password/domain.",
+        "authType NEGOTIATE - используется Windows Negotiate/NTLM через текущую Windows-сессию. На Linux и macOS возвращается ошибка.",
+        "Заголовки host, content-length и connection не проксируются.",
+        "CORS-заголовки для Р7 Office добавляет локальный сервер, а не сторонний сервер."
     )
 )

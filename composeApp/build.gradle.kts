@@ -1,6 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-val applicationVersion = "2.2.3"
+val applicationVersion = "2.3.0"
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info/kotlin")
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -45,6 +45,8 @@ kotlin {
             implementation(libs.cronet.embedded)
             implementation(libs.kotlin.csv)
             implementation(libs.apache.poi.ooxml)
+            implementation(libs.apache.httpclient5)
+            implementation(libs.apache.httpclient5.win)
         }
     }
 }

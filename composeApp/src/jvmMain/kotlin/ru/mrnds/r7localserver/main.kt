@@ -3,6 +3,7 @@ package ru.mrnds.r7localserver
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
@@ -17,6 +18,9 @@ import ru.mrnds.r7localserver.tray.AppTray
 import ru.mrnds.r7localserver.ui.App
 import ru.mrnds.r7localserver.ui.widgets.TrayPanel
 import ru.mrnds.r7localserver.viewmodel.AppViewModel
+import java.awt.GraphicsEnvironment
+import java.awt.MouseInfo
+import java.awt.Rectangle
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.io.File
@@ -28,6 +32,10 @@ fun main() {
             val viewModel = remember { AppViewModel() }
             val appIcon = painterResource(Res.drawable.icon)
             var isTrayPanelVisible by remember { mutableStateOf(false) }
+            val trayWindowSize = DpSize(360.dp, 250.dp)
+            var trayWindowPosition by remember {
+                mutableStateOf<WindowPosition>(WindowPosition.Aligned(Alignment.BottomEnd))
+            }
 
             LaunchedEffect(Unit) {
                 if (viewModel.settings.startServerOnAppStart) {
@@ -55,6 +63,7 @@ fun main() {
                         showWindow()
                     },
                     onOpenTrayPanel = {
+                        trayWindowPosition = trayWindowPositionNearCursor(trayWindowSize)
                         isTrayPanelVisible = !isTrayPanelVisible
                     }
                 )
@@ -82,9 +91,8 @@ fun main() {
                     resizable = false,
                     undecorated = true,
                     state = rememberWindowState(
-                        width = 360.dp,
-                        height = 250.dp,
-                        position = WindowPosition.Aligned(Alignment.BottomEnd)
+                        size = trayWindowSize,
+                        position = trayWindowPosition
                     )
                 ) {
                     DisposableEffect(window) {
@@ -151,4 +159,47 @@ private fun configureLogDirectory(): File {
     System.setProperty("r7.log.dir", logDirectory.absolutePath)
 
     return logDirectory
+}
+
+private fun trayWindowPositionNearCursor(windowSize: DpSize): WindowPosition {
+    if (!Platform.isWindows) {
+        return WindowPosition.Aligned(Alignment.BottomEnd)
+    }
+
+    val pointerLocation = runCatching {
+        MouseInfo.getPointerInfo()?.location
+    }.getOrNull() ?: return WindowPosition.Aligned(Alignment.BottomEnd)
+
+    val screenBounds = findScreenBounds(pointerLocation.x, pointerLocation.y)
+        ?: return WindowPosition.Aligned(Alignment.BottomEnd)
+
+    val windowWidthPx = windowSize.width.value.toInt()
+    val windowHeightPx = windowSize.height.value.toInt()
+    val marginPx = 12
+
+    val preferredX = pointerLocation.x - windowWidthPx
+    val preferredY = pointerLocation.y - windowHeightPx
+
+    val x = preferredX.coerceIn(
+        screenBounds.x + marginPx,
+        screenBounds.x + screenBounds.width - windowWidthPx - marginPx
+    )
+
+    val y = preferredY.coerceIn(
+        screenBounds.y + marginPx,
+        screenBounds.y + screenBounds.height - windowHeightPx - marginPx
+    )
+
+    return WindowPosition.Absolute(
+        x = x.dp,
+        y = y.dp
+    )
+}
+
+private fun findScreenBounds(x: Int, y: Int): Rectangle? {
+    return GraphicsEnvironment
+        .getLocalGraphicsEnvironment()
+        .screenDevices
+        .map { it.defaultConfiguration.bounds }
+        .firstOrNull { it.contains(x, y) }
 }

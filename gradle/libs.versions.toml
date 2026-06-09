@@ -11,6 +11,7 @@ logback = "1.5.18"
 cronetEmbedded = "143.7445.0"
 kotlinCsv = "1.10.0"
 apachePoi = "5.5.1"
+apacheHttpClient = "5.2.3"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -36,6 +37,8 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 cronet-embedded = { group = "org.chromium.net", name = "cronet-embedded", version.ref = "cronetEmbedded" }
 kotlin-csv = { module = "com.github.doyaaaaaken:kotlin-csv", version.ref = "kotlinCsv" }
 apache-poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "apachePoi" }
+apache-httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "apacheHttpClient" }
+apache-httpclient5-win = { module = "org.apache.httpcomponents.client5:httpclient5-win", version.ref = "apacheHttpClient" }
 
 [plugins]
 composeHotReload = { id = "org.jetbrains.compose.hot-reload", version.ref = "composeHotReload" }
