@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ru.mrnds.r7localserver.settings.AppThemeMode
+import ru.mrnds.r7localserver.ui.theme.AppTheme
 import java.awt.datatransfer.StringSelection
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -67,7 +69,9 @@ fun CodeBlock(
         TextButton(
             modifier = Modifier
                 .align(Alignment.TopEnd),
-            colors = ButtonDefaults.textButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = ButtonDefaults.textButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
             onClick = {
                 coroutineScope.launch {
                     clipboard.setClipEntry(ClipEntry(StringSelection(text)))
@@ -87,5 +91,7 @@ fun CodeBlock(
 @Preview
 @Composable
 fun CodeBlockPreview() {
-    CodeBlock(text = "Hello world")
+    AppTheme(AppThemeMode.DARK) {
+        CodeBlock(text = "Hello world")
+    }
 }

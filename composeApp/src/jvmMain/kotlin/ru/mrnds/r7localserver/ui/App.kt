@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -19,11 +19,12 @@ import ru.mrnds.r7localserver.viewmodel.AppViewModel
 
 @Composable
 fun App(viewModel: AppViewModel) {
-    MaterialTheme {
-        var selectedTab by remember { mutableStateOf(AppTab.SETTINGS) }
+    var selectedTab by remember { mutableStateOf(AppTab.SETTINGS) }
 
-        val serverAddress = "http://127.0.0.1:${viewModel.serverPort}"
-
+    val serverAddress = "http://127.0.0.1:${viewModel.serverPort}"
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -58,9 +59,11 @@ fun App(viewModel: AppViewModel) {
                         startMinimized = viewModel.settings.startMinimized,
                         appVersion = AppBuildInfo.VERSION,
                         onServerPortChange = { viewModel.updateServerPort(it) },
+                        themeMode = viewModel.settings.themeMode,
                         onStartWithSystemChange = { viewModel.updateStartWithSystem(it) },
                         onStartServerOnAppStartChange = { viewModel.updateStartServerOnAppStart(it) },
                         onStartMinimizedChange = { viewModel.updateStartMinimized(it) },
+                        onThemeModeChange = { viewModel.updateThemeMode(it) },
                     )
 
                     AppTab.DOCUMENTATION -> DocumentationScreen(
@@ -85,6 +88,7 @@ fun App(viewModel: AppViewModel) {
         }
     }
 }
+
 
 private enum class AppTab(
     val title: String

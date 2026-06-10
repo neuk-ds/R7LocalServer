@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,7 @@ fun DocumentationScreen(
                 .fillMaxSize(),
 
             thickness = DividerDefaults.Thickness,
-            color = DividerDefaults.color
+            color = MaterialTheme.colorScheme.outlineVariant
         )
 
         val scrollState = rememberScrollState()

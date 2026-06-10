@@ -14,8 +14,8 @@ import ru.mrnds.r7localserver.server.LocalServer
 import ru.mrnds.r7localserver.server.ServerConfig
 import ru.mrnds.r7localserver.settings.AppSettings
 import ru.mrnds.r7localserver.settings.AppSettingsRepository
+import ru.mrnds.r7localserver.settings.AppThemeMode
 import ru.mrnds.r7localserver.settings.autoStart.createAutoStart
-import java.awt.Desktop
 import java.io.File
 
 class AppViewModel {
@@ -49,7 +49,7 @@ class AppViewModel {
     val logDirectoryPath: String
         get() {
             val logDirectory = System.getProperty("r7.log.dir") ?: "./logs"
-            return java.io.File(logDirectory).absolutePath
+            return File(logDirectory).absolutePath
         }
 
     fun startServer() {
@@ -159,6 +159,11 @@ class AppViewModel {
     fun updateStartMinimized(enabled: Boolean) {
         saveSettings(settings.copy(startMinimized = enabled))
         logger.info("Start minimized changed: {}", enabled)
+    }
+
+    fun updateThemeMode(themeMode: AppThemeMode) {
+        saveSettings(settings.copy(themeMode = themeMode))
+        logger.info("Theme mode changed: {}", themeMode)
     }
 
     fun shutdown() {

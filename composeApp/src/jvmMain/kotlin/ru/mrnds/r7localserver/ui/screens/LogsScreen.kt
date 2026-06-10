@@ -86,7 +86,7 @@ fun LogsScreen(logDirectoryPath: String, onOpenLogDirectory: () -> Unit) {
 private fun logColor(entry: UiLogEntry): Color {
     return when (entry.level) {
         UiLogLevel.ERROR -> MaterialTheme.colorScheme.error
-        UiLogLevel.WARN -> Color(0xFFB26A00)
+        UiLogLevel.WARN -> MaterialTheme.colorScheme.tertiary
         UiLogLevel.INFO -> MaterialTheme.colorScheme.onSurface
         UiLogLevel.DEBUG -> MaterialTheme.colorScheme.onSurfaceVariant
         UiLogLevel.TRACE -> MaterialTheme.colorScheme.outline

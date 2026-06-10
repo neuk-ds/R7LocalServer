@@ -6,8 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import ru.mrnds.r7localserver.settings.AppThemeMode
+import ru.mrnds.r7localserver.ui.widgets.ThemeModeDropdown
 
 @Composable
 fun SettingsScreen(
@@ -17,10 +18,12 @@ fun SettingsScreen(
     startServerOnAppStart: Boolean,
     startMinimized: Boolean,
     appVersion: String,
+    themeMode: AppThemeMode,
     onServerPortChange: (String) -> Unit,
     onStartWithSystemChange: (Boolean) -> Unit,
     onStartServerOnAppStartChange: (Boolean) -> Unit,
     onStartMinimizedChange: (Boolean) -> Unit,
+    onThemeModeChange: (AppThemeMode) -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -74,6 +77,11 @@ fun SettingsScreen(
                 checked = startMinimized,
                 onCheckedChange = onStartMinimizedChange
             )
+
+            ThemeModeDropdown(
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange
+            )
         }
         Text(
             text = "Версия: $appVersion",
@@ -105,25 +113,6 @@ fun SettingsSwitch(text: String, checked: Boolean, onCheckedChange: (Boolean) ->
         HorizontalDivider(
             modifier = Modifier.padding(top = 1.dp),
             color = MaterialTheme.colorScheme.outlineVariant
-        )
-    }
-}
-
-@Composable
-@Preview(showBackground = true)
-private fun SettingsScreenPreview() {
-    MaterialTheme {
-        SettingsScreen(
-            serverPort = "8124",
-            isServerRunning = false,
-            startWithSystem = false,
-            startServerOnAppStart = false,
-            startMinimized = false,
-            appVersion = "2.1.0",
-            onServerPortChange = { },
-            onStartWithSystemChange = { },
-            onStartServerOnAppStartChange = { },
-            onStartMinimizedChange = { },
         )
     }
 }

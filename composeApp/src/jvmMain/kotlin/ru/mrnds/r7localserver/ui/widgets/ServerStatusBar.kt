@@ -29,7 +29,7 @@ fun ServerStatusBar(
         HorizontalDivider(
             modifier = Modifier,
             thickness = 1.dp,
-            color = DividerDefaults.color
+            color = MaterialTheme.colorScheme.outlineVariant
         )
         Row(
             modifier = Modifier
@@ -74,6 +74,14 @@ fun ServerStatusBar(
                     } else {
                         onStartClick()
                     }
+                },
+                colors = if (isRunning) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
                 }
             ) {
                 Text(

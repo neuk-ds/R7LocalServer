@@ -16,6 +16,7 @@ import ru.mrnds.r7localserver.platform.AppDirectories
 import ru.mrnds.r7localserver.platform.Platform
 import ru.mrnds.r7localserver.tray.AppTray
 import ru.mrnds.r7localserver.ui.App
+import ru.mrnds.r7localserver.ui.theme.AppTheme
 import ru.mrnds.r7localserver.ui.widgets.TrayPanel
 import ru.mrnds.r7localserver.viewmodel.AppViewModel
 import java.awt.GraphicsEnvironment
@@ -32,7 +33,7 @@ fun main() {
             val viewModel = remember { AppViewModel() }
             val appIcon = painterResource(Res.drawable.icon)
             var isTrayPanelVisible by remember { mutableStateOf(false) }
-            val trayWindowSize = DpSize(360.dp, 250.dp)
+            val trayWindowSize = DpSize(360.dp, 240.dp)
             var trayWindowPosition by remember {
                 mutableStateOf<WindowPosition>(WindowPosition.Aligned(Alignment.BottomEnd))
             }
@@ -90,6 +91,7 @@ fun main() {
                     alwaysOnTop = true,
                     resizable = false,
                     undecorated = true,
+                    transparent = true,
                     state = rememberWindowState(
                         size = trayWindowSize,
                         position = trayWindowPosition
@@ -106,16 +108,18 @@ fun main() {
                             window.removeWindowFocusListener(listener)
                         }
                     }
+                    AppTheme(themeMode = viewModel.settings.themeMode) {
 
-                    TrayPanel(
-                        viewModel = viewModel,
-                        onOpenMainWindow = { showWindow() },
-                        onClosePanel = { isTrayPanelVisible = false },
-                        onExit = {
-                            viewModel.shutdown()
-                            exitApplication()
-                        }
-                    )
+                        TrayPanel(
+                            viewModel = viewModel,
+                            onOpenMainWindow = { showWindow() },
+                            onClosePanel = { isTrayPanelVisible = false },
+                            onExit = {
+                                viewModel.shutdown()
+                                exitApplication()
+                            }
+                        )
+                    }
                 }
             }
 
@@ -137,7 +141,9 @@ fun main() {
                 icon = appIcon,
                 state = windowState,
             ) {
-                App(viewModel)
+                AppTheme(themeMode = viewModel.settings.themeMode) {
+                    App(viewModel)
+                }
             }
         }
     } catch (e: Throwable) {
