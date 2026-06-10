@@ -10,6 +10,7 @@ val documentationGroups = listOf(
             pingDoc,
             filesReadDoc,
             filesWriteDoc,
+            excelExportDoc,
             proxyRequestDoc
         )
     ),
