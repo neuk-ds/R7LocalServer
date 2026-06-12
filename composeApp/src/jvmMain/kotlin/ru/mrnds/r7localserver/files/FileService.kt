@@ -113,6 +113,12 @@ class FileService {
         require(!fileName.contains("/") && !fileName.contains("\\")) {
             "File name must not contain path separators"
         }
+
+        val baseDir = File(directoryPath).canonicalFile
+        val resolvedFile = File(baseDir, fileName).canonicalFile
+        require(resolvedFile.path.startsWith(baseDir.path + File.separator)) {
+            "File path is outside the specified directory"
+        }
     }
 
     private fun prepareDirectory(

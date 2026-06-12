@@ -24,7 +24,7 @@ class ExcelFileWriter : FileWriter {
             json.decodeFromJsonElement<ExcelRawContent>(content)
         } catch (e: Exception) {
             logger.error("Invalid Excel options JSON", e)
-            throw IllegalArgumentException("Invalid Excel options JSON")
+            throw IllegalArgumentException("Invalid Excel options JSON", e)
         }
 
         require(options.sheets.isNotEmpty()) { "Excel sheets must not be empty" }

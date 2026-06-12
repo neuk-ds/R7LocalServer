@@ -19,7 +19,7 @@ class XmlFileWriter : FileWriter {
             json.decodeFromJsonElement<XmlFileOptions>(content)
         } catch (e: Exception) {
             logger.error("Invalid XML file options JSON", e)
-            throw IllegalArgumentException("Invalid XML file options JSON")
+            throw IllegalArgumentException("Invalid XML file options JSON", e)
         }
 
         validateNode(options.root)

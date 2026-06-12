@@ -18,7 +18,7 @@ class JsonFileReader : FileReader {
             json.parseToJsonElement(content)
         } catch (e: Exception) {
             logger.error("Invalid JSON file content: {}", file.absolutePath, e)
-            throw IllegalArgumentException("Invalid JSON file content")
+            throw IllegalArgumentException("Invalid JSON file content", e)
         }
     }
 

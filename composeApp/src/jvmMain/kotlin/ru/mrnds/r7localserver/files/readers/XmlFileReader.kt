@@ -25,7 +25,7 @@ class XmlFileReader : FileReader {
             factory.newDocumentBuilder().parse(file)
         } catch (e: Exception) {
             logger.error("Invalid XML file: {}", file.absolutePath, e)
-            throw IllegalStateException("Invalid XML file")
+            throw IllegalStateException("Invalid XML file", e)
         }
 
         val rootElement = document.documentElement

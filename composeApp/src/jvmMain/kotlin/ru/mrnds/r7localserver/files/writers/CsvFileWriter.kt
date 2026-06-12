@@ -18,7 +18,7 @@ class CsvFileWriter : FileWriter {
             json.decodeFromJsonElement<CsvFileOptions>(content)
         } catch (e: Exception) {
             logger.error("Invalid CSV options JSON", e)
-            throw IllegalArgumentException("Invalid CSV options JSON")
+            throw IllegalArgumentException("Invalid CSV options JSON", e)
         }
 
         require(options.delimiter.isNotEmpty()) {

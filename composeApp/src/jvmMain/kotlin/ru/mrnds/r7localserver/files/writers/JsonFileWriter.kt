@@ -14,7 +14,7 @@ class JsonFileWriter : FileWriter {
             return file
         } catch (e: Exception) {
             logger.error("Invalid JSON content", e)
-            throw IllegalArgumentException("Invalid JSON")
+            throw IllegalArgumentException("Invalid JSON", e)
         }
     }
 }

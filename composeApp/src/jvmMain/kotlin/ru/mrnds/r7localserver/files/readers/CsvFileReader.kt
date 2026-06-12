@@ -23,7 +23,7 @@ class CsvFileReader : FileReader {
             }.readAll(file)
         } catch (e: Exception) {
             logger.error("Invalid CSV file: {}", file.absolutePath, e)
-            throw IllegalArgumentException("Invalid CSV file")
+            throw IllegalArgumentException("Invalid CSV file", e)
         }
         val options = CsvFileOptions(
             delimiter = delimiter.toString(),
