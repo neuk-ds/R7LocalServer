@@ -7,5 +7,4 @@ data class ExportExcelSheetsResponse(
     val targetDirectoryPath: String,
     val targetFileName: String,
     val exportedSheetNames: List<String>,
-    val replacedFormulaCount: Int,
 )

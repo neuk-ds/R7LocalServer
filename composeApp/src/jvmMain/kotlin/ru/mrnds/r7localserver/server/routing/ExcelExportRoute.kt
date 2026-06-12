@@ -18,14 +18,14 @@ fun Route.excelExportRoute(excelSheetExporter: ExcelSheetExporter) {
             val targetPath = File(request.targetDirectoryPath, request.targetFileName).path
             logger.info(
                 "Export Excel sheets request: source={}, target={}, sheets={}, overwrite={}",
-                sourcePath, targetPath, request.sheetNames, request.overwrite
+                sourcePath, targetPath, request.sheets.map { it.name }, request.overwrite
             )
 
             val response = excelSheetExporter.exportSheets(request)
             call.respond(response)
             logger.info(
-                "Excel sheets exported successfully: target={}, sheets={}, replacedFormulas={}",
-                targetPath, response.exportedSheetNames, response.replacedFormulaCount
+                "Excel sheets exported successfully: target={}, sheets={}",
+                targetPath, response.exportedSheetNames
             )
         }
     }

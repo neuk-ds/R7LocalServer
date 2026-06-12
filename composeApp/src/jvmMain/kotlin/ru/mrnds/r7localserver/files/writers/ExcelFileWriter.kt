@@ -12,9 +12,12 @@ import ru.mrnds.r7localserver.files.model.excel.ExcelRawCell
 import ru.mrnds.r7localserver.files.model.excel.ExcelRawContent
 import java.io.File
 import java.io.FileOutputStream
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 class ExcelFileWriter : FileWriter {
     private val logger = LoggerFactory.getLogger(ExcelFileWriter::class.java)
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     val json = Json {
         ignoreUnknownKeys = true
     }
@@ -96,7 +99,14 @@ class ExcelFileWriter : FileWriter {
             }
 
             ExcelCellType.DATETIME -> {
-                cell.setCellValue(rawCell.value)
+                val dateTime = runCatching {
+                    LocalDateTime.parse(rawCell.value, dateTimeFormatter)
+                }.getOrNull()
+                if (dateTime != null) {
+                    cell.setCellValue(dateTime)
+                } else {
+                    cell.setCellValue(rawCell.value)
+                }
             }
 
             ExcelCellType.BLANK -> {
