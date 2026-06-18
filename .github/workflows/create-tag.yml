@@ -2,6 +2,12 @@ name: Create Tag
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: Force re-tag and re-release if tag already exists
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -38,9 +44,17 @@ jobs:
         run: |
           git fetch --tags
           if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "Tag ${{ steps.version.outputs.tag }} already exists"
-            exit 1
+            if [ "${{ inputs.force }}" != "true" ]; then
+              echo "Tag ${{ steps.version.outputs.tag }} already exists. Use force=true to re-tag."
+              exit 1
+            fi
+            echo "Force mode: deleting existing tag and release"
+            git push --delete origin "${{ steps.version.outputs.tag }}" || true
+            git tag --delete "${{ steps.version.outputs.tag }}" || true
+            gh release delete "${{ steps.version.outputs.tag }}" --yes || true
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Create and push tag
         shell: bash

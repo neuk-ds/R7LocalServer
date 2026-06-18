@@ -106,7 +106,7 @@ jobs:
           for dir in plugins/*/; do
             name="${dir#plugins/}"
             name="${name%/}"
-            (cd plugins && zip -r "../dist/${name}.zip" "${name}")
+            (cd "plugins/${name}" && zip -r "../../dist/${name}.zip" .)
             mv "dist/${name}.zip" "dist/${name}.plugin"
           done
 
@@ -138,6 +138,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" dist/**/* \
-            --title "$RELEASE_TAG" \
-            --notes "Release $RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/**/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/**/* \
+              --title "$RELEASE_TAG" \
+              --notes "Release $RELEASE_TAG"
+          fi
