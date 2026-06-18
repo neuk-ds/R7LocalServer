@@ -17,20 +17,21 @@ fun Route.macroSyncRoute(macroSyncService: MacroSyncService) {
 
             require(request.directoryPath.isNotBlank()) { "directoryPath must not be empty" }
             require(request.fileName.isNotBlank()) { "fileName must not be empty" }
-            require(request.mode in setOf("merge", "push", "load", "refresh")) {
-                "mode must be 'merge', 'push', 'load', or 'refresh', got '${request.mode}'"
+            require(request.mode in setOf("merge", "push", "load", "refresh", "delete")) {
+                "mode must be 'merge', 'push', 'load', 'refresh', or 'delete', got '${request.mode}'"
             }
 
             val filePath = File(request.directoryPath, request.fileName).path
             logger.info(
-                "Macros sync request: mode={}, file={}, macros={}",
-                request.mode, filePath, request.macrosArray.size
+                "Macros sync request: mode={}, file={}, macros={}, selectedGuids={}",
+                request.mode, filePath, request.macrosArray.size, request.selectedGuids.size
             )
 
             val response = when (request.mode) {
                 "merge"   -> macroSyncService.merge(request)
                 "load"    -> macroSyncService.load(request)
                 "refresh" -> macroSyncService.refresh(request)
+                "delete"  -> macroSyncService.delete(request)
                 else      -> macroSyncService.push(request)
             }
 

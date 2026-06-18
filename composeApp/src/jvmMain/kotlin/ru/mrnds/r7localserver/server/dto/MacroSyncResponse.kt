@@ -10,5 +10,6 @@ data class MacroSyncResponse(
     val conflicts: List<String> = emptyList(),
     val updated: List<String> = emptyList(),
     val added: List<String> = emptyList(),
+    val deleted: List<String> = emptyList(),
     val totalUniversal: Int? = null,
 )

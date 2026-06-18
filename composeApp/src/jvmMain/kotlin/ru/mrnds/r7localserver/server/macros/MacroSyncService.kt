@@ -167,13 +167,32 @@ class MacroSyncService {
         )
     }
 
+    fun delete(request: MacroSyncRequest): MacroSyncResponse {
+        val file = File(request.directoryPath, request.fileName)
+
+        if (!file.exists()) {
+            throw NotFoundException("Universal macros file not found: ${file.absolutePath}.")
+        }
+
+        val universalFile = readUniversalFile(file)
+        val toDeleteGuids = request.selectedGuids.toSet()
+        val deleted = universalFile.macrosArray.filter { it.guid() in toDeleteGuids }.map { it.name() }
+        val remaining = universalFile.macrosArray.filter { it.guid() !in toDeleteGuids }
+
+        writeUniversalFile(file, remaining)
+
+        return MacroSyncResponse(
+            deleted = deleted,
+            totalUniversal = remaining.size,
+        )
+    }
+
     private fun ensureSeparator(macros: List<JsonObject>): List<JsonObject> {
         val without = macros.filter { !it.isSeparator() }
-        val lastUniversalIdx = without.indexOfLast { it.isUniversal() }
-        if (lastUniversalIdx == -1) return without
-        val result = without.toMutableList()
-        result.add(lastUniversalIdx + 1, SEPARATOR_OBJECT)
-        return result
+        val universal = without.filter { it.isUniversal() }
+        val regular = without.filter { !it.isUniversal() }
+        if (universal.isEmpty()) return without
+        return universal + SEPARATOR_OBJECT + regular
     }
 
     private fun readUniversalFile(file: File): UniversalMacrosFile {

@@ -8,6 +8,6 @@ data class MacroSyncRequest(
     val directoryPath: String,
     val fileName: String,
     val mode: String = "merge",
-    val macrosArray: List<JsonObject>,
+    val macrosArray: List<JsonObject> = emptyList(),
     val selectedGuids: List<String> = emptyList(),
 )

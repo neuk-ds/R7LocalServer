@@ -112,6 +112,25 @@ summary {
     width: 100%;
 }
 
+.column-footer.two-btn {
+    display: flex;
+    gap: 4px;
+}
+
+.column-footer.two-btn button {
+    flex: 1;
+}
+
+button.danger {
+    background: #fff0f0;
+    border-color: #e8a0a0;
+    color: #b00000;
+}
+
+button.danger:hover {
+    background: #ffe0e0;
+}
+
 /* ===== Строки макросов ===== */
 
 .row {
@@ -151,6 +170,10 @@ summary {
     color: #555;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.exclude-label {
+    color: #b05a00;
 }
 
 .select-cb {
@@ -347,6 +370,10 @@ body.dark .universal-label {
     color: #b0b0b0;
 }
 
+body.dark .exclude-label {
+    color: #c07030;
+}
+
 body.dark .badge-exists {
     background: #1e3a52;
     color: #7aaedc;
@@ -370,6 +397,16 @@ body.dark button.primary {
 
 body.dark button.primary:hover {
     background: #254a6a;
+}
+
+body.dark button.danger {
+    background: #3a1515;
+    border-color: #7a3030;
+    color: #ff8080;
+}
+
+body.dark button.danger:hover {
+    background: #4a2020;
 }
 
 body.dark .confirm-box {

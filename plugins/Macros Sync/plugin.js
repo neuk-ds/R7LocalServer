@@ -25,17 +25,10 @@
 
     function ensureSeparator(macrosArray) {
         const without = macrosArray.filter(m => !m.isSeparator && m.guid !== SEPARATOR_GUID);
-
-        let lastUniversalIdx = -1;
-        without.forEach((m, i) => {
-            if (m.isUniversal === true) lastUniversalIdx = i;
-        });
-
-        if (lastUniversalIdx === -1) return without;
-
-        const result = [...without];
-        result.splice(lastUniversalIdx + 1, 0, { ...SEPARATOR });
-        return result;
+        const universal = without.filter(m => m.isUniversal === true);
+        const regular = without.filter(m => m.isUniversal !== true);
+        if (universal.length === 0) return without;
+        return [...universal, { ...SEPARATOR }, ...regular];
     }
 
     // ===== Утилиты =====
@@ -120,6 +113,20 @@
                 label.appendChild(cb);
                 label.appendChild(document.createTextNode('универсальный'));
                 row.appendChild(label);
+
+                if (macro.isUniversal) {
+                    const labelEx = document.createElement('label');
+                    labelEx.className = 'universal-label exclude-label';
+
+                    const cbEx = document.createElement('input');
+                    cbEx.type = 'checkbox';
+                    cbEx.checked = !!macro.isExcludedFromAutoSync;
+                    cbEx.addEventListener('change', () => onToggleExcluded(macro, cbEx.checked));
+
+                    labelEx.appendChild(cbEx);
+                    labelEx.appendChild(document.createTextNode('не синхр.'));
+                    row.appendChild(labelEx);
+                }
             }
 
             listEl.appendChild(row);
@@ -174,7 +181,7 @@
 
     // ===== Модальное окно подтверждения =====
 
-    function showConfirm(msg, conflicts) {
+    function showConfirm(msg, conflicts, listTitle) {
         return new Promise((resolve) => {
             document.getElementById('confirmMsg').textContent = msg;
 
@@ -183,7 +190,7 @@
             conflictsList.innerHTML = '';
 
             if (conflicts.length > 0) {
-                conflictsLabel.textContent = 'Будут перезаписаны макросы:';
+                conflictsLabel.textContent = listTitle || 'Будут перезаписаны макросы:';
                 conflicts.forEach(name => {
                     const li = document.createElement('li');
                     li.textContent = name;
@@ -237,14 +244,14 @@
         });
     }
 
-    function toggleUniversalInDocument(guid, value) {
+    function toggleExcludedFromAutoSync(guid, value) {
         Asc.scope.guid = guid;
         Asc.scope.value = value;
         return new Promise((resolve) => {
             window.Asc.plugin.callCommand(function () {
                 let data = JSON.parse(Api.pluginMethod_GetMacros());
                 let macro = data.macrosArray.find(m => m.guid === Asc.scope.guid);
-                if (macro) macro.isUniversal = Asc.scope.value;
+                if (macro) macro.isExcludedFromAutoSync = Asc.scope.value;
                 Api.pluginMethod_SetMacros(JSON.stringify(data));
             }, false, false, function (result) {
                 resolve(result);
@@ -312,8 +319,17 @@
 
     async function onToggleUniversal(macro, checked) {
         macro.isUniversal = checked;
-        await toggleUniversalInDocument(macro.guid, checked);
+        if (!checked) macro.isExcludedFromAutoSync = false;
+        currentMacros = ensureSeparator(currentMacros);
+        await setMacrosInDocument(currentMacros);
+        renderCurrent();
         log(`«${macro.name}» помечен как ${checked ? 'универсальный' : 'обычный'}`);
+    }
+
+    async function onToggleExcluded(macro, checked) {
+        macro.isExcludedFromAutoSync = checked;
+        await toggleExcludedFromAutoSync(macro.guid, checked);
+        log(`«${macro.name}» ${checked ? 'исключён из' : 'включён в'} авто-синх.`);
     }
 
     function onSelectAll() {
@@ -378,6 +394,57 @@
         }
     }
 
+    async function onDeleteSelected() {
+        if (selectedGuids.size === 0) {
+            log('Не выбрано ни одного макроса для удаления');
+            return;
+        }
+
+        const serverUrl = getServerUrl();
+        const { directoryPath, fileName } = getPaths();
+
+        if (!directoryPath || !fileName) {
+            log('Укажите папку и имя файла в настройках');
+            return;
+        }
+
+        const toDelete = savedMacros.filter(m => selectedGuids.has(m.guid));
+        const confirmed = await showConfirm(
+            `Будет удалено из файла: ${toDelete.length} макрос(ов).`,
+            toDelete.map(m => m.name),
+            'Будут удалены из файла:'
+        );
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch(`${serverUrl}/macros/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: 'delete',
+                    directoryPath,
+                    fileName,
+                    selectedGuids: [...selectedGuids]
+                })
+            });
+
+            const json = await res.json();
+
+            if (!res.ok) {
+                log(`Ошибка сервера: ${json.message || res.status}`);
+                return;
+            }
+
+            await loadSavedMacros();
+            log(
+                `Удалено из файла: ${(json.deleted || []).join(', ') || '—'}; ` +
+                `осталось в файле: ${json.totalUniversal}`
+            );
+        } catch (err) {
+            log('Ошибка: ' + err.message);
+        }
+    }
+
     async function onPush() {
         const serverUrl = getServerUrl();
         const { directoryPath, fileName } = getPaths();
@@ -435,6 +502,7 @@
         document.getElementById('btnRefresh').addEventListener('click', loadMacros);
         document.getElementById('btnSelectAll').addEventListener('click', onSelectAll);
         document.getElementById('btnLoadSelected').addEventListener('click', onLoadSelected);
+        document.getElementById('btnDeleteSelected').addEventListener('click', onDeleteSelected);
         document.getElementById('btnPush').addEventListener('click', onPush);
 
         void Promise.all([

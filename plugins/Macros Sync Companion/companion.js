@@ -87,6 +87,12 @@
         }
 
         // 3. Обновляем универсальные макросы через сервер
+        const excludedMacros = (docData.macrosArray || []).filter(
+            m => m.isUniversal === true && m.isExcludedFromAutoSync === true
+        );
+        const excludedGuids = new Set(excludedMacros.map(m => m.guid));
+        const excludedNames = new Set(excludedMacros.map(m => m.name));
+
         let result;
         try {
             const { ok, json } = await fetchJson(serverUrl, '/macros/sync', {
@@ -103,6 +109,16 @@
         } catch (e) {
             console.error('[MacrosSync Companion] Не удалось выполнить синхронизацию:', e);
             return;
+        }
+
+        // Восстанавливаем исключённые макросы — не обновляем их при автосинхронизации
+        if (excludedGuids.size > 0 && result.macrosArray) {
+            result.macrosArray = result.macrosArray.map(m =>
+                excludedGuids.has(m.guid)
+                    ? (excludedMacros.find(e => e.guid === m.guid) || m)
+                    : m
+            );
+            result.updated = (result.updated || []).filter(n => !excludedNames.has(n));
         }
 
         // 4. Записываем только если что-то изменилось

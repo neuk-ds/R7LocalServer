@@ -52,8 +52,9 @@
                 <button id="btnSelectAll" class="btn-small">Все</button>
             </div>
             <div id="listSaved" class="macro-list">—</div>
-            <div class="column-footer">
+            <div class="column-footer two-btn">
                 <button id="btnLoadSelected" class="primary">Загрузить выбранные</button>
+                <button id="btnDeleteSelected" class="danger">Удалить из файла</button>
             </div>
         </div>
 
@@ -65,7 +66,7 @@
     <!-- Модальное окно подтверждения -->
     <div id="confirmOverlay" class="overlay hidden">
         <div class="confirm-box">
-            <div class="confirm-title">Подтвердите загрузку</div>
+            <div class="confirm-title">Подтвердите действие</div>
             <div class="confirm-msg" id="confirmMsg"></div>
             <div class="confirm-list-label" id="conflictsLabel"></div>
             <ul id="conflictsList"></ul>
