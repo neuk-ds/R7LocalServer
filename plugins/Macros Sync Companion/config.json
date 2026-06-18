@@ -1,0 +1,28 @@
+{
+  "guid": "asc.{dbba06c0-1008-4672-a3c3-a22215388e8d}",
+  "version": "1.0",
+  "name": "Синхронизация макросов",
+  "nameLocale": {
+    "en": "Macros Sync Companion"
+  },
+  "variations": [
+    {
+      "description": "Автосинхронизация макросов при открытии книги",
+      "EditorsSupport": [
+        "cell"
+      ],
+      "url": "companion.html",
+      "icons": [
+        "icon.svg",
+        "icon.svg"
+      ],
+      "isVisual": false,
+      "isModal": false,
+      "isSystem": true,
+      "isViewer": false,
+      "isInsideMode": true,
+      "initDataType": "none",
+      "buttons": []
+    }
+  ]
+}

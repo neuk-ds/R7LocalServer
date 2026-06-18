@@ -92,11 +92,36 @@ jobs:
           name: linux-deb
           path: composeApp/build/compose/binaries/main/deb/*.deb
 
+  plugins:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Package plugins
+        run: |
+          mkdir -p dist
+          for dir in plugins/*/; do
+            name="${dir#plugins/}"
+            name="${name%/}"
+            (cd plugins && zip -r "../dist/${name}.zip" "${name}")
+            mv "dist/${name}.zip" "dist/${name}.plugin"
+          done
+
+      - name: Upload plugin artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: plugins
+          path: dist/*.plugin
+
   release:
     runs-on: ubuntu-latest
     needs:
       - windows
       - linux
+      - plugins
 
     steps:
       - name: Checkout

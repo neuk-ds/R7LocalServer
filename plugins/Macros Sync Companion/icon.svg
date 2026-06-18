@@ -1,0 +1,9 @@
+<svg width="100%" viewBox="0 0 280 280" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Macros Sync</title>
+<rect x="88" y="55" width="115" height="145" rx="10" fill="#c8ccff" stroke="#4f5dc8" stroke-width="8"/>
+<rect x="72" y="70" width="115" height="145" rx="10" fill="#eef0ff" stroke="#4f5dc8" stroke-width="8"/>
+<text x="98" y="128" fill="#4f5dc8" font-family="monospace" font-size="32px" font-weight="700">{</text>
+<line x1="116" y1="146" x2="168" y2="146" stroke="#4f5dc8" stroke-width="7" stroke-linecap="round"/>
+<line x1="116" y1="165" x2="150" y2="165" stroke="#4f5dc8" stroke-width="7" stroke-linecap="round"/>
+<text x="98" y="207" fill="#4f5dc8" font-family="monospace" font-size="32px" font-weight="700">}</text>
+</svg>

@@ -1,0 +1,52 @@
+{
+    "guid": "asc.{9c4be932-7357-468b-bfe1-e3a379079d87}",
+    "version": "1.0",
+    "name": "Синхронизация макросов",
+    "nameLocale": {
+        "en": "Macros Sync"
+    },
+    "variations": [
+        {
+            "description": "Экспорт/импорт универсальных макросов между книгами",
+            "EditorsSupport": [
+                "cell"
+            ],
+            "url": "index.html",
+            "icons": [
+                "resources/light/icon.svg",
+                "resources/light/icon.svg"
+            ],
+            "icons2": [
+				{
+					"style" : "light",
+					
+					"100%": {
+						"normal": "resources/light/icon.svg"
+					}
+                },
+                {
+					"style" : "dark",
+					
+					"100%": {
+						"normal": "resources/dark/icon_dark.svg"
+					}
+                }
+            ],
+            "isVisual": true,
+            "isModal": true,
+            "isSystem": false,
+            "isViewer": false,
+            "initDataType": "none",
+            "size": [
+                640,
+                640
+            ],
+            "buttons": [
+                {
+                    "text": "Закрыть",
+                    "primary": false
+                }
+            ]
+        }
+    ]
+}

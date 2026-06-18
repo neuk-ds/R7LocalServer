@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script type="text/javascript" src="../v1/plugins.js"></script>
+    <script type="text/javascript" src="../v1/plugins-ui.js"></script>
+    <link rel="stylesheet" href="../v1/plugins.css">
+    <script type="text/javascript" src="plugin.js"></script>
+</head>
+
+<body>
+
+    <!-- Настройки -->
+    <details id="settingsBlock">
+        <summary>Настройки</summary>
+        <div class="settings-grid">
+            <label>Адрес сервера</label>
+            <input type="text" id="serverUrl" placeholder="http://127.0.0.1:8124" />
+            <label>Папка с общим файлом</label>
+            <input type="text" id="dirPath" placeholder="D:\shared" />
+            <label>Имя файла</label>
+            <input type="text" id="fileName" placeholder="universal_macros.json" />
+            <label>Папка резервных копий</label>
+            <input type="text" id="backupPath" placeholder="D:\shared\backup" />
+            <label class="checkbox-label" for="autoSync">Авто-синхронизация при открытии</label>
+            <input type="checkbox" id="autoSync" />
+        </div>
+        <button id="btnSaveSettings">Сохранить настройки</button>
+    </details>
+
+    <!-- Двухколоночная область -->
+    <div class="columns">
+
+        <!-- Левый столбец: текущая книга -->
+        <div class="column">
+            <div class="column-header">
+                <span>Текущая книга</span>
+                <button id="btnRefresh" class="btn-small">↺</button>
+            </div>
+            <div id="listCurrent" class="macro-list">Загрузка...</div>
+            <div class="column-footer">
+                <button id="btnPush">Опубликовать универсальные</button>
+            </div>
+        </div>
+
+        <!-- Правый столбец: сохранённые -->
+        <div class="column">
+            <div class="column-header">
+                <span>Сохранённые</span>
+                <button id="btnSelectAll" class="btn-small">Все</button>
+            </div>
+            <div id="listSaved" class="macro-list">—</div>
+            <div class="column-footer">
+                <button id="btnLoadSelected" class="primary">Загрузить выбранные</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Лог -->
+    <div id="log"></div>
+
+    <!-- Модальное окно подтверждения -->
+    <div id="confirmOverlay" class="overlay hidden">
+        <div class="confirm-box">
+            <div class="confirm-title">Подтвердите загрузку</div>
+            <div class="confirm-msg" id="confirmMsg"></div>
+            <div class="confirm-list-label" id="conflictsLabel"></div>
+            <ul id="conflictsList"></ul>
+            <div class="confirm-buttons">
+                <button id="btnConfirmOk" class="primary">Загрузить</button>
+                <button id="btnConfirmCancel">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
