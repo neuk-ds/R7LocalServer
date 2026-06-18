@@ -1,6 +1,6 @@
 # Commercial License — R7LocalServer
 
-Copyright (c) 2026 mr_nds
+Copyright (c) 2026 Неук Дмитрий Сергеевич
 
 ## Для кого предназначена коммерческая лицензия
 
