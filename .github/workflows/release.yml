@@ -106,7 +106,7 @@ jobs:
           for dir in plugins/*/; do
             name="${dir#plugins/}"
             name="${name%/}"
-            (cd plugins && zip -r "../dist/${name}.zip" "${name}")
+            (cd "plugins/${name}" && zip -r "../../dist/${name}.zip" .)
             mv "dist/${name}.zip" "dist/${name}.plugin"
           done
 
