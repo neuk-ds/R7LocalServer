@@ -4,7 +4,7 @@ import ru.mrnds.r7localserver.ui.documentation.model.EndpointDoc
 
 val macroSyncDoc = EndpointDoc(
     id = "macros-sync",
-    title = "Синхронизация макросов",
+    title = "Синхронизация макросов (старый API)",
     method = "POST",
     path = "/macros/sync",
     description = "Синхронизирует универсальные макросы между книгами Р7 Офис через общий JSON-файл на диске. Режим merge обновляет macrosArray книги из файла; режим push записывает универсальные макросы книги в файл.",
@@ -34,6 +34,7 @@ val macroSyncDoc = EndpointDoc(
         }
     """.trimIndent(),
     notes = listOf(
+        "Для версионной библиотеки используйте /macros/v2. Старый API возвращает 409 для управляемых файлов; обновите сервер и плагины на всех компьютерах.",
         "directoryPath — обязательное поле. Путь к папке с файлом универсальных макросов.",
         "fileName — обязательное поле. Имя JSON-файла с универсальными макросами.",
         "mode — необязательное поле. 'merge' (по умолчанию) или 'push'.",

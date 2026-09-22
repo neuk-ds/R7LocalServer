@@ -22,17 +22,21 @@ fun Route.macroSyncRoute(macroSyncService: MacroSyncService) {
             }
 
             val filePath = File(request.directoryPath, request.fileName).path
+            ru.mrnds.r7localserver.server.macros.MacroHistoryStore.protect(File(filePath))
             logger.info(
                 "Macros sync request: mode={}, file={}, macros={}, selectedGuids={}",
                 request.mode, filePath, request.macrosArray.size, request.selectedGuids.size
             )
 
-            val response = when (request.mode) {
-                "merge"   -> macroSyncService.merge(request)
-                "load"    -> macroSyncService.load(request)
-                "refresh" -> macroSyncService.refresh(request)
-                "delete"  -> macroSyncService.delete(request)
-                else      -> macroSyncService.push(request)
+            val response = ru.mrnds.r7localserver.server.macros.MacroHistoryStore().locked(File(filePath).canonicalFile) {
+                ru.mrnds.r7localserver.server.macros.MacroHistoryStore.protect(File(filePath))
+                when (request.mode) {
+                    "merge"   -> macroSyncService.merge(request)
+                    "load"    -> macroSyncService.load(request)
+                    "refresh" -> macroSyncService.refresh(request)
+                    "delete"  -> macroSyncService.delete(request)
+                    else      -> macroSyncService.push(request)
+                }
             }
 
             call.respond(response)

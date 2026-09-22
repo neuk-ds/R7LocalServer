@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory
 import ru.mrnds.r7localserver.files.FileService
 import ru.mrnds.r7localserver.files.exporter.ExcelSheetExporter
 import ru.mrnds.r7localserver.server.macros.MacroSyncService
+import ru.mrnds.r7localserver.server.macros.VersionedMacroService
+import ru.mrnds.r7localserver.server.routing.versionedMacroRoute
 import ru.mrnds.r7localserver.server.proxy.ProxyService
 import ru.mrnds.r7localserver.server.routing.excelExportRoute
 import ru.mrnds.r7localserver.server.routing.fileRoute
@@ -28,6 +30,7 @@ class LocalServer(
     private val proxyService = ProxyService()
     private val excelSheetExporter = ExcelSheetExporter()
     private val macroSyncService = MacroSyncService()
+    private val versionedMacroService = VersionedMacroService()
 
     fun start() {
         if (server != null) {
@@ -62,6 +65,7 @@ class LocalServer(
 
             routing {
                 pingRoutes()
+                versionedMacroRoute(versionedMacroService)
                 fileRoute(
                     fileService = fileService,
                 )

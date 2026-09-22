@@ -1,518 +1,263 @@
-(function (window, undefined) {
-
-    // ===== Константы =====
-    const LS_SERVER_URL  = 'macrosSync_serverUrl';
-    const LS_DIR_PATH    = 'macrosSync_dirPath';
-    const LS_FILE_NAME   = 'macrosSync_fileName';
-    const LS_BACKUP_PATH = 'macrosSync_backupPath';
-    const LS_AUTO_SYNC   = 'macrosSync_autoSync';
-    const SEPARATOR_GUID = '00000000-separator-0000-000000000000';
-
-    // ===== Состояние =====
-    let currentMacros = [];   // macrosArray текущей книги
-    let savedMacros = [];     // macrosArray из общего файла
-    let selectedGuids = new Set(); // выбранные в правом столбце
-
-    // ===== Управление разделителем (только для нормализации левого столбца) =====
-
-    const SEPARATOR = {
-        name: ' ',
-        guid: SEPARATOR_GUID,
-        value: '',
-        autostart: false,
-        isSeparator: true
-    };
-
-    function ensureSeparator(macrosArray) {
-        const without = macrosArray.filter(m => !m.isSeparator && m.guid !== SEPARATOR_GUID);
-        const universal = without.filter(m => m.isUniversal === true);
-        const regular = without.filter(m => m.isUniversal !== true);
-        if (universal.length === 0) return without;
-        return [...universal, { ...SEPARATOR }, ...regular];
+(function (window) {
+    'use strict';
+    const core = window.R7SyncCore;
+    const $ = id => document.getElementById(id);
+    const kinds = { added: 'Добавлен', modified: 'Изменён', deleted: 'Удалён', unchanged: 'Без изменений', conflict: 'Конфликт' };
+    const settings = { serverUrl: 'http://127.0.0.1:8124', dirPath: '', fileName: 'universal_macros.json', backupPath: '' };
+    let doc = { macrosArray: [] }, library = { macrosArray: [] }, state, active, busy = false;
+    let currentSelection = new Set(), savedSelection = new Set();
+    function log(message) { $('log').textContent = '[' + new Date().toLocaleTimeString() + '] ' + message + '\n' + $('log').textContent; }
+    function node(tag, text, className) {
+        const element = document.createElement(tag);
+        if (text != null) element.textContent = text;
+        if (className) element.className = className;
+        return element;
     }
-
-    // ===== Утилиты =====
-
-    function log(msg) {
-        const el = document.getElementById('log');
-        const time = new Date().toLocaleTimeString();
-        el.textContent = `[${time}] ${msg}\n` + el.textContent;
+    function button(text, action) {
+        const element = node('button', text);
+        element.type = 'button'; element.addEventListener('click', () => run(action));
+        return element;
     }
-
-    function isUniversalCandidate(macro) {
-        return macro.isUniversal === true;
+    async function run(action) {
+        if (busy) return;
+        busy = true;
+        document.body.classList.add('busy');
+        try { await action(); } catch (error) { log(error.message); }
+        finally { busy = false; document.body.classList.remove('busy'); }
     }
-
-    function getServerUrl() {
-        return document.getElementById('serverUrl').value.trim();
-    }
-
-    function getPaths() {
-        return {
-            directoryPath: document.getElementById('dirPath').value.trim(),
-            fileName: document.getElementById('fileName').value.trim()
-        };
-    }
-
-    // ===== Настройки (localStorage) =====
-
-    function loadSettings() {
-        document.getElementById('serverUrl').value  = localStorage.getItem(LS_SERVER_URL)  || 'http://127.0.0.1:8124';
-        document.getElementById('dirPath').value    = localStorage.getItem(LS_DIR_PATH)    || '';
-        document.getElementById('fileName').value   = localStorage.getItem(LS_FILE_NAME)   || 'universal_macros.json';
-        document.getElementById('backupPath').value = localStorage.getItem(LS_BACKUP_PATH) || '';
-        document.getElementById('autoSync').checked = localStorage.getItem(LS_AUTO_SYNC) === 'true';
-    }
-
-    function saveSettings() {
-        localStorage.setItem(LS_SERVER_URL,  document.getElementById('serverUrl').value.trim());
-        localStorage.setItem(LS_DIR_PATH,    document.getElementById('dirPath').value.trim());
-        localStorage.setItem(LS_FILE_NAME,   document.getElementById('fileName').value.trim());
-        localStorage.setItem(LS_BACKUP_PATH, document.getElementById('backupPath').value.trim());
-        localStorage.setItem(LS_AUTO_SYNC,   document.getElementById('autoSync').checked ? 'true' : 'false');
-        log('Настройки сохранены');
-    }
-
-    // ===== Тема =====
-
-    function applyTheme() {
-        const theme = localStorage.getItem('ui-theme') || '';
-        if (theme.includes('dark')) {
-            document.body.classList.add('dark');
-        } else {
-            document.body.classList.remove('dark');
-        }
-    }
-
-    // ===== Рендер левого столбца (текущая книга) =====
-
-    function renderCurrent() {
-        const listEl = document.getElementById('listCurrent');
-        listEl.innerHTML = '';
-
-        currentMacros.forEach(macro => {
-            const row = document.createElement('div');
-            row.className = 'row' + (macro.isSeparator ? ' sep-row' : '');
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'name';
-            nameSpan.textContent = macro.isSeparator
-                ? '── разделитель ──'
-                : (macro.name || '(без имени)');
-            row.appendChild(nameSpan);
-
-            if (!macro.isSeparator) {
-                const label = document.createElement('label');
-                label.className = 'universal-label';
-
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.checked = !!macro.isUniversal;
-                cb.addEventListener('change', () => onToggleUniversal(macro, cb.checked));
-
-                label.appendChild(cb);
-                label.appendChild(document.createTextNode('универсальный'));
-                row.appendChild(label);
-
-                if (macro.isUniversal) {
-                    const labelEx = document.createElement('label');
-                    labelEx.className = 'universal-label exclude-label';
-
-                    const cbEx = document.createElement('input');
-                    cbEx.type = 'checkbox';
-                    cbEx.checked = !!macro.isExcludedFromAutoSync;
-                    cbEx.addEventListener('change', () => onToggleExcluded(macro, cbEx.checked));
-
-                    labelEx.appendChild(cbEx);
-                    labelEx.appendChild(document.createTextNode('не синхр.'));
-                    row.appendChild(labelEx);
-                }
-            }
-
-            listEl.appendChild(row);
+    function paths() { return { directoryPath: $('dirPath').value.trim(), fileName: $('fileName').value.trim() }; }
+    async function api(path, body) {
+        const response = await fetch($('serverUrl').value.trim().replace(/\/$/, '') + path, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
         });
+        if (response.status === 404 && path.startsWith('/macros/v2')) throw new Error('Требуется обновить R7LocalServer до версии с Macros Sync v2.');
+        let result;
+        try { result = await response.json(); } catch (_) { throw new Error('Сервер вернул некорректный ответ'); }
+        if (!response.ok) throw new Error(result.message || 'Ошибка сервера: ' + response.status);
+        return result;
     }
-
-    // ===== Рендер правого столбца (сохранённые) =====
-
-    function renderSaved() {
-        const listEl = document.getElementById('listSaved');
-        listEl.innerHTML = '';
-
-        if (savedMacros.length === 0) {
-            listEl.textContent = 'Файл пуст или не загружен';
-            return;
-        }
-
-        const currentGuids = new Set(currentMacros.map(m => m.guid));
-
-        savedMacros.forEach(macro => {
-            const row = document.createElement('div');
-            row.className = 'row';
-
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.className = 'select-cb';
-            cb.checked = selectedGuids.has(macro.guid);
-            cb.addEventListener('change', () => {
-                if (cb.checked) {
-                    selectedGuids.add(macro.guid);
-                } else {
-                    selectedGuids.delete(macro.guid);
-                }
+    function realMacros(data) { return data.macrosArray.filter(m => !m.isSeparator && m.guid !== '00000000-separator-0000-000000000000'); }
+    function selectionBox(set, guid) {
+        const checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.checked = set.has(guid);
+        checkbox.addEventListener('change', () => checkbox.checked ? set.add(guid) : set.delete(guid));
+        return checkbox;
+    }
+    function render() {
+        $('listCurrent').replaceChildren(); $('listSaved').replaceChildren();
+        realMacros(doc).forEach(macro => {
+            const row = node('div', null, 'row');
+            row.append(selectionBox(currentSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
+            const label = node('label', null, 'universal-label');
+            const check = node('input'); check.type = 'checkbox'; check.checked = macro.isUniversal === true;
+            check.addEventListener('change', () => run(async () => {
+                const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
+                const target = next.macrosArray.find(m => m.guid === macro.guid);
+                if (!target) throw new Error('Макрос удалён. Обновите список.');
+                target.isUniversal = check.checked;
+                if (!check.checked) target.isExcludedFromAutoSync = false;
+                await core.apply(Asc.plugin, Asc.scope, latest, next);
+                await refresh();
+            }));
+            label.append(check, document.createTextNode('универсальный')); row.append(label);
+            if (macro.isUniversal) {
+                const excluded = node('input'); excluded.type = 'checkbox'; excluded.checked = !!macro.isExcludedFromAutoSync;
+                const exLabel = node('label', null, 'universal-label');
+                excluded.addEventListener('change', () => run(async () => {
+                    const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
+                    const target = next.macrosArray.find(m => m.guid === macro.guid);
+                    if (!target) throw new Error('Макрос удалён. Обновите список.');
+                    target.isExcludedFromAutoSync = excluded.checked;
+                    await core.apply(Asc.plugin, Asc.scope, latest, next); await refresh();
+                }));
+                exLabel.append(excluded, document.createTextNode('не проверять')); row.append(exLabel);
+            }
+            $('listCurrent').append(row);
+        });
+        const allLibraryIds = new Set(realMacros(library).map(m => m.guid));
+        // Deleted library macros remain visible so their deletion can be reviewed explicitly.
+        const missing = realMacros(doc).filter(m => m._r7Sync && m._r7Sync.libraryId === (library._r7Library || {}).libraryId && !allLibraryIds.has(m.guid));
+        realMacros(library).concat(missing).forEach(macro => {
+            const row = node('div', null, 'row');
+            row.append(selectionBox(savedSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
+            if (!allLibraryIds.has(macro.guid)) row.append(node('span', 'удалён из библиотеки', 'badge-exists'));
+            $('listSaved').append(row);
+        });
+        $('libraryStatus').textContent = !state ? '' : !state.managed ? 'История ещё не включена' :
+            state.externalChanges ? 'Обнаружены внешние изменения. Зарегистрируйте их перед синхронизацией.' : 'Версия: ' + library._r7Library.revisionId;
+        $('btnImport').textContent = state && state.managed ? 'Проверить внешние изменения' : 'Включить историю';
+    }
+    async function refresh() {
+        doc = await core.read(Asc.plugin);
+        state = await api('/macros/v2/state', paths()); library = state.library;
+        render();
+    }
+    async function preview(action, revisionId, replacementDocument) {
+        doc = await core.read(Asc.plugin);
+        const selectedGuids = action === 'push' ? [...currentSelection].filter(id => realMacros(doc).some(m => m.guid === id && m.isUniversal)) : [...savedSelection];
+        if (['push', 'pull', 'delete'].includes(action) && !selectedGuids.length) throw new Error('Выберите макросы; для публикации — универсальные.');
+        const request = Object.assign(paths(), { action, document: doc, selectedGuids, revisionId: revisionId || null, replacementDocument: replacementDocument || null });
+        const response = await api('/macros/v2/preview', request);
+        active = { action, request, response, selected: new Set(response.changes.map(c => c.guid)), resolutions: {}, reviewed: new Set(), editors: new Map() };
+        drawReview();
+    }
+    function drawReview() {
+        const panel = $('reviewChanges'); panel.replaceChildren();
+        $('reviewTitle').textContent = ({ push: 'Сохранить в библиотеку', pull: 'Применить к документу', delete: 'Удалить из библиотеки', restore: 'Восстановить версию библиотеки', import: 'Зарегистрировать библиотеку', restoreDocument: 'Восстановить резервную копию документа' })[active.action];
+        active.response.changes.forEach(change => {
+            const card = node('details', null, 'change-card'); card.open = change.kind === 'conflict';
+            const summary = node('summary');
+            const include = selectionBox(active.selected, change.guid);
+            include.disabled = ['restore', 'import', 'restoreDocument'].includes(active.action);
+            include.addEventListener('change', updateApply);
+            summary.append(include, document.createTextNode(' ' + change.name + ' — ' + kinds[change.kind]));
+            card.append(summary);
+            const versions = node('div', null, 'versions');
+            [['База', change.base], ['Документ / входящая версия', change.document], ['Библиотека / текущая версия', change.library]].forEach(([title, macro]) => {
+                const block = node('details'); block.append(node('summary', title), node('pre', macro == null ? '(отсутствует)' : JSON.stringify(macro, null, 2)));
+                versions.append(block);
             });
-            row.appendChild(cb);
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'name';
-            nameSpan.textContent = macro.name || '(без имени)';
-            row.appendChild(nameSpan);
-
-            if (currentGuids.has(macro.guid)) {
-                const badge = document.createElement('span');
-                badge.className = 'badge-exists';
-                badge.textContent = 'есть';
-                row.appendChild(badge);
+            card.append(versions);
+            const diff = node('pre', null, 'diff');
+            change.diff.forEach(line => diff.append(node('div', String(line.oldLine || '').padStart(4) + ' ' + String(line.newLine || '').padStart(4) + ' ' + ({ added: '+', removed: '-', same: ' ' })[line.kind] + ' ' + line.text, line.kind)));
+            card.append(diff);
+            const editor = node('textarea'); editor.className = 'result-code'; editor.spellcheck = false;
+            editor.value = change.result ? change.result.value : '';
+            const metadata = node('textarea'); metadata.className = 'result-metadata'; metadata.spellcheck = false;
+            let resultMacro = change.result && JSON.parse(JSON.stringify(change.result));
+            function showResult(macro) {
+                resultMacro = macro == null ? null : JSON.parse(JSON.stringify(macro));
+                editor.value = resultMacro ? resultMacro.value : '';
+                const fields = resultMacro && Object.assign({}, resultMacro); if (fields) delete fields.value;
+                metadata.value = JSON.stringify(fields, null, 2);
+                editor.disabled = resultMacro == null;
             }
-
-            listEl.appendChild(row);
-        });
-    }
-
-    // ===== Модальное окно подтверждения =====
-
-    function showConfirm(msg, conflicts, listTitle) {
-        return new Promise((resolve) => {
-            document.getElementById('confirmMsg').textContent = msg;
-
-            const conflictsLabel = document.getElementById('conflictsLabel');
-            const conflictsList = document.getElementById('conflictsList');
-            conflictsList.innerHTML = '';
-
-            if (conflicts.length > 0) {
-                conflictsLabel.textContent = listTitle || 'Будут перезаписаны макросы:';
-                conflicts.forEach(name => {
-                    const li = document.createElement('li');
-                    li.textContent = name;
-                    conflictsList.appendChild(li);
+            showResult(change.result);
+            const controls = node('div', null, 'review-controls');
+            function choose(macro) {
+                showResult(macro);
+                active.resolutions[change.guid] = { macro: resultMacro };
+                active.reviewed.add(change.guid); updateApply();
+            }
+            controls.append(button('Взять документ', () => choose(change.document)), button('Взять библиотеку', () => choose(change.library)));
+            const decisions = new Map();
+            if (change.chunks.some(c => c.document != null)) {
+                const conflicts = node('div');
+                change.chunks.forEach((chunk, index) => {
+                    if (chunk.document == null) return;
+                    const block = node('div', null, 'conflict-block');
+                    block.append(node('pre', 'Документ:\n' + chunk.document + '\nБиблиотека:\n' + chunk.library));
+                    function pick(side) {
+                        decisions.set(index, chunk[side]);
+                        editor.value = change.chunks.map((c, i) => c.document == null ? c.text : decisions.has(i) ? decisions.get(i) : c.document).join('');
+                        active.reviewed.delete(change.guid);
+                        active.resolutions[change.guid] = { macro: resultMacro }; updateApply();
+                        block.classList.add('resolved');
+                    }
+                    block.append(button('Участок из документа', () => pick('document')), button('Участок из библиотеки', () => pick('library')));
+                    conflicts.append(block);
                 });
-                conflictsLabel.classList.remove('hidden');
-            } else {
-                conflictsLabel.classList.add('hidden');
+                card.append(conflicts);
             }
-
-            document.getElementById('confirmOverlay').classList.remove('hidden');
-
-            function cleanup() {
-                document.getElementById('confirmOverlay').classList.add('hidden');
-                document.getElementById('btnConfirmOk').removeEventListener('click', onOk);
-                document.getElementById('btnConfirmCancel').removeEventListener('click', onCancel);
+            controls.append(button('Подтвердить итог этого макроса', () => {
+                let fields = JSON.parse(metadata.value);
+                if (fields != null) {
+                    if (fields.guid !== change.guid) throw new Error('GUID результата нельзя менять');
+                    fields.value = editor.value;
+                }
+                resultMacro = fields;
+                active.resolutions[change.guid] = { macro: fields };
+                active.reviewed.add(change.guid); updateApply();
+            }));
+            const edited = () => { active.reviewed.delete(change.guid); active.resolutions[change.guid] = { macro: resultMacro }; updateApply(); };
+            editor.addEventListener('input', edited); metadata.addEventListener('input', edited);
+            card.append(node('div', 'Итоговый код'), editor, node('div', 'Итоговые свойства (null — удалить макрос)'), metadata, controls);
+            if (['import', 'restore', 'restoreDocument', 'delete'].includes(active.action)) {
+                editor.readOnly = true; metadata.readOnly = true; controls.replaceChildren();
             }
-
-            function onOk() { cleanup(); resolve(true); }
-            function onCancel() { cleanup(); resolve(false); }
-
-            document.getElementById('btnConfirmOk').addEventListener('click', onOk);
-            document.getElementById('btnConfirmCancel').addEventListener('click', onCancel);
+            panel.append(card);
         });
+        if (!active.response.changes.length) panel.append(node('p', 'Изменений макросов нет. Можно зарегистрировать исходное состояние библиотеки.'));
+        $('reviewOverlay').classList.remove('hidden');
+        $('reviewComment').value = '';
+        updateApply();
     }
-
-    // ===== Вызовы в контекст документа =====
-
-    function getMacrosFromDocument() {
-        return new Promise((resolve) => {
-            window.Asc.plugin.callCommand(function () {
-                return Api.pluginMethod_GetMacros();
-            }, false, false, function (result) {
-                let json = JSON.parse(result);
-                currentMacros = json.macrosArray || [];
-                resolve(currentMacros);
-            });
+    function updateApply() {
+        if (!active) return;
+        const unresolved = active.response.changes.filter(c => active.selected.has(c.guid) &&
+            (c.conflicts.length || Object.prototype.hasOwnProperty.call(active.resolutions, c.guid)) && !active.reviewed.has(c.guid));
+        $('reviewStatus').textContent = unresolved.length ? 'Требуют подтверждения: ' + unresolved.map(c => c.name).join(', ') : 'Итог готов к применению';
+        $('btnApply').disabled = unresolved.length > 0;
+    }
+    async function applyReview() {
+        if (!active) return;
+        const current = await core.read(Asc.plugin);
+        if (active.prepared && core.canonical(current) === core.canonical(active.prepared.document)) {
+            log('Запись в документ подтверждена повторным чтением. Сохраните книгу в Р7.');
+            $('reviewOverlay').classList.add('hidden'); active = null; await refresh(); return;
+        }
+        if (core.canonical(current) !== core.canonical(active.request.document)) throw new Error('Документ изменился. Нажмите «Пересчитать».');
+        const selectedGuids = [...active.selected];
+        const resolutions = Object.fromEntries(Object.entries(active.resolutions).filter(([id]) => active.selected.has(id)));
+        // Preserve the exact request for retries, even if the network response is lost.
+        const candidate = Object.assign({}, { directoryPath: active.request.directoryPath, fileName: active.request.fileName }, {
+            token: active.response.token, operationId: active.response.operationId, selectedGuids, resolutions,
+            comment: $('reviewComment').value, backupDirectory: $('backupPath').value.trim()
         });
+        if (active.applyRequest && core.canonical(active.applyRequest) !== core.canonical(candidate))
+            throw new Error('Результат предыдущей попытки неизвестен. Верните прежний выбор для повтора либо перечитайте библиотеку и пересчитайте изменения.');
+        if (!active.applyRequest) active.applyRequest = candidate;
+        const result = await api('/macros/v2/apply', active.applyRequest);
+        if (result.backupPath) { localStorage.setItem('macrosSync_lastBackup', result.backupPath); log('Резервная копия: ' + result.backupPath); }
+        if (result.document && result.changed) {
+            active.prepared = result;
+            const written = await core.apply(Asc.plugin, Asc.scope, result.expectedDocument, result.document);
+            if (written.metadataLost) log('Р7 не сохранил базу синхронизации. Дальнейшие различия потребуют ручного выбора.');
+            log('Макросы применены к открытой книге. Сохраните документ в Р7.');
+        } else log(result.changed ? 'Сохранена версия ' + result.revisionId : 'Изменений для сохранения нет.');
+        $('reviewOverlay').classList.add('hidden'); active = null; await refresh();
     }
-
-    function setMacrosInDocument(macrosArray) {
-        Asc.scope.macrosArray = macrosArray;
-        return new Promise((resolve) => {
-            window.Asc.plugin.callCommand(function () {
-                let data = JSON.parse(Api.pluginMethod_GetMacros());
-                data.macrosArray = Asc.scope.macrosArray;
-                Api.pluginMethod_SetMacros(JSON.stringify(data));
-            }, false, false, function (result) {
-                resolve(result);
-            });
+    async function showHistory() {
+        const records = await api('/macros/v2/history', paths());
+        $('historyList').replaceChildren();
+        records.forEach(record => {
+            const row = node('div', null, 'history-row');
+            row.append(node('span', new Date(record.time).toLocaleString() + ' · ' + record.author + ' · ' + (record.comment || 'Без комментария') + ' · ' + record.id));
+            row.append(button('Просмотреть и восстановить', async () => {
+                $('historyOverlay').classList.add('hidden'); await preview('restore', record.id);
+            }));
+            $('historyList').append(row);
         });
+        $('historyOverlay').classList.remove('hidden');
     }
-
-    function toggleExcludedFromAutoSync(guid, value) {
-        Asc.scope.guid = guid;
-        Asc.scope.value = value;
-        return new Promise((resolve) => {
-            window.Asc.plugin.callCommand(function () {
-                let data = JSON.parse(Api.pluginMethod_GetMacros());
-                let macro = data.macrosArray.find(m => m.guid === Asc.scope.guid);
-                if (macro) macro.isExcludedFromAutoSync = Asc.scope.value;
-                Api.pluginMethod_SetMacros(JSON.stringify(data));
-            }, false, false, function (result) {
-                resolve(result);
-            });
-        });
+    async function restoreBackup() {
+        const path = window.prompt('Полный путь к резервной копии макросов:', localStorage.getItem('macrosSync_lastBackup') || '');
+        if (!path) return;
+        const split = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        if (split < 0) throw new Error('Укажите полный путь к копии');
+        const response = await api('/files/read', { directoryPath: path.slice(0, split), fileName: path.slice(split + 1) });
+        const backup = typeof response.content === 'string' ? JSON.parse(response.content) : response.content;
+        await preview('restoreDocument', null, backup);
     }
-
-    // ===== Загрузка сохранённых макросов с сервера =====
-
-    async function loadSavedMacros() {
-        const serverUrl = getServerUrl();
-        const { directoryPath, fileName } = getPaths();
-
-        if (!directoryPath || !fileName) {
-            log('Укажите папку и имя файла в настройках');
-            return;
-        }
-
-        document.getElementById('listSaved').textContent = 'Загрузка...';
-        try {
-            const res = await fetch(`${serverUrl}/files/read`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ directoryPath, fileName })
-            });
-
-            const json = await res.json();
-            if (!res.ok) {
-                log(`Ошибка чтения файла: ${json.message || res.status}`);
-                document.getElementById('listSaved').textContent = 'Ошибка загрузки';
-                return;
-            }
-
-            savedMacros = (json.content.macrosArray || []).filter(m => !m.isSeparator);
-            selectedGuids.clear();
-            renderSaved();
-            log(`Загружено сохранённых макросов: ${savedMacros.length}`);
-        } catch (err) {
-            log('Ошибка загрузки сохранённых: ' + err.message);
-            document.getElementById('listSaved').textContent = 'Ошибка загрузки';
-        }
-    }
-
-    // ===== Обработчики =====
-
-    async function loadMacros() {
-        document.getElementById('listCurrent').textContent = 'Загрузка...';
-        await getMacrosFromDocument();
-
-        const fixed = ensureSeparator(currentMacros);
-        const separatorChanged =
-            JSON.stringify(fixed.map(m => m.guid)) !==
-            JSON.stringify(currentMacros.map(m => m.guid));
-
-        if (separatorChanged) {
-            currentMacros = fixed;
-            await setMacrosInDocument(currentMacros);
-            log('Разделитель восстановлен');
-        }
-
-        renderCurrent();
-        if (savedMacros.length > 0) renderSaved();
-        log(`Загружено макросов книги: ${currentMacros.length}`);
-    }
-
-    async function onToggleUniversal(macro, checked) {
-        macro.isUniversal = checked;
-        if (!checked) macro.isExcludedFromAutoSync = false;
-        currentMacros = ensureSeparator(currentMacros);
-        await setMacrosInDocument(currentMacros);
-        renderCurrent();
-        log(`«${macro.name}» помечен как ${checked ? 'универсальный' : 'обычный'}`);
-    }
-
-    async function onToggleExcluded(macro, checked) {
-        macro.isExcludedFromAutoSync = checked;
-        await toggleExcludedFromAutoSync(macro.guid, checked);
-        log(`«${macro.name}» ${checked ? 'исключён из' : 'включён в'} авто-синх.`);
-    }
-
-    function onSelectAll() {
-        const allChecked = savedMacros.every(m => selectedGuids.has(m.guid));
-        if (allChecked) {
-            selectedGuids.clear();
-        } else {
-            savedMacros.forEach(m => selectedGuids.add(m.guid));
-        }
-        renderSaved();
-    }
-
-    async function onLoadSelected() {
-        if (selectedGuids.size === 0) {
-            log('Не выбрано ни одного макроса');
-            return;
-        }
-
-        const serverUrl = getServerUrl();
-        const { directoryPath, fileName } = getPaths();
-
-        if (!directoryPath || !fileName) {
-            log('Укажите папку и имя файла в настройках');
-            return;
-        }
-
-        try {
-            const res = await fetch(`${serverUrl}/macros/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    mode: 'load',
-                    directoryPath,
-                    fileName,
-                    macrosArray: currentMacros,
-                    selectedGuids: [...selectedGuids]
-                })
-            });
-
-            const json = await res.json();
-
-            if (!res.ok) {
-                log(`Ошибка сервера: ${json.message || res.status}`);
-                return;
-            }
-
-            const msg = `Будет загружено макросов: ${selectedGuids.size}.`;
-            const confirmed = await showConfirm(msg, json.conflicts || []);
-            if (!confirmed) return;
-
-            await setMacrosInDocument(json.macrosArray);
-            currentMacros = json.macrosArray;
-            renderCurrent();
-            renderSaved();
-
-            log(
-                `Загружено. Обновлено: ${(json.updated || []).join(', ') || '—'}; ` +
-                `добавлено: ${(json.added || []).join(', ') || '—'}`
-            );
-        } catch (err) {
-            log('Ошибка: ' + err.message);
-        }
-    }
-
-    async function onDeleteSelected() {
-        if (selectedGuids.size === 0) {
-            log('Не выбрано ни одного макроса для удаления');
-            return;
-        }
-
-        const serverUrl = getServerUrl();
-        const { directoryPath, fileName } = getPaths();
-
-        if (!directoryPath || !fileName) {
-            log('Укажите папку и имя файла в настройках');
-            return;
-        }
-
-        const toDelete = savedMacros.filter(m => selectedGuids.has(m.guid));
-        const confirmed = await showConfirm(
-            `Будет удалено из файла: ${toDelete.length} макрос(ов).`,
-            toDelete.map(m => m.name),
-            'Будут удалены из файла:'
-        );
-        if (!confirmed) return;
-
-        try {
-            const res = await fetch(`${serverUrl}/macros/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    mode: 'delete',
-                    directoryPath,
-                    fileName,
-                    selectedGuids: [...selectedGuids]
-                })
-            });
-
-            const json = await res.json();
-
-            if (!res.ok) {
-                log(`Ошибка сервера: ${json.message || res.status}`);
-                return;
-            }
-
-            await loadSavedMacros();
-            log(
-                `Удалено из файла: ${(json.deleted || []).join(', ') || '—'}; ` +
-                `осталось в файле: ${json.totalUniversal}`
-            );
-        } catch (err) {
-            log('Ошибка: ' + err.message);
-        }
-    }
-
-    async function onPush() {
-        const serverUrl = getServerUrl();
-        const { directoryPath, fileName } = getPaths();
-
-        if (!directoryPath || !fileName) {
-            log('Укажите папку и имя файла в настройках');
-            return;
-        }
-
-        const universalCount = currentMacros.filter(isUniversalCandidate).length;
-        if (universalCount === 0) {
-            log('Нет макросов, помеченных как универсальные');
-            return;
-        }
-
-        log(`Публикация ${universalCount} универсальных макросов...`);
-        try {
-            const res = await fetch(`${serverUrl}/macros/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    directoryPath,
-                    fileName,
-                    mode: 'push',
-                    macrosArray: currentMacros
-                })
-            });
-
-            const json = await res.json();
-
-            if (!res.ok) {
-                log(`Ошибка сервера: ${json.message || res.status}`);
-                return;
-            }
-
-            await loadSavedMacros();
-
-            log(
-                `Готово. Обновлено: ${(json.updated || []).join(', ') || '—'}; ` +
-                `добавлено: ${(json.added || []).join(', ') || '—'}; ` +
-                `всего в файле: ${json.totalUniversal}`
-            );
-        } catch (err) {
-            log('Ошибка: ' + err.message);
-        }
-    }
-
-    // ===== Инициализация =====
-
     window.Asc.plugin.init = function () {
-        applyTheme();
-        loadSettings();
-
-        document.getElementById('btnSaveSettings').addEventListener('click', saveSettings);
-        document.getElementById('btnRefresh').addEventListener('click', loadMacros);
-        document.getElementById('btnSelectAll').addEventListener('click', onSelectAll);
-        document.getElementById('btnLoadSelected').addEventListener('click', onLoadSelected);
-        document.getElementById('btnDeleteSelected').addEventListener('click', onDeleteSelected);
-        document.getElementById('btnPush').addEventListener('click', onPush);
-
-        void Promise.all([
-            loadMacros(),
-            loadSavedMacros()
-        ]);
+        for (const [key, fallback] of Object.entries(settings)) $(key).value = localStorage.getItem('macrosSync_' + key) || fallback;
+        $('autoSync').checked = localStorage.getItem('macrosSync_autoSync') === 'true';
+        if ((localStorage.getItem('ui-theme') || '').includes('dark')) document.body.classList.add('dark');
+        const bind = (id, fn) => $(id).addEventListener('click', () => run(fn));
+        bind('btnSaveSettings', () => {
+            for (const key of Object.keys(settings)) localStorage.setItem('macrosSync_' + key, $(key).value.trim());
+            localStorage.setItem('macrosSync_autoSync', String($('autoSync').checked)); log('Настройки сохранены');
+        });
+        bind('btnRefresh', refresh);
+        bind('btnSelectCurrent', () => { currentSelection = new Set(realMacros(doc).filter(m => m.isUniversal).map(m => m.guid)); render(); });
+        bind('btnSelectAll', () => { savedSelection = new Set(realMacros(library).map(m => m.guid)); render(); });
+        bind('btnPush', () => preview('push')); bind('btnLoadSelected', () => preview('pull'));
+        bind('btnDeleteSelected', () => preview('delete')); bind('btnImport', () => preview('import'));
+        bind('btnHistory', showHistory); bind('btnRestoreBackup', restoreBackup);
+        bind('btnApply', applyReview);
+        bind('btnRecalculate', () => preview(active.action, active.request.revisionId, active.request.replacementDocument));
+        bind('btnCancelReview', () => { $('reviewOverlay').classList.add('hidden'); active = null; });
+        bind('btnCloseHistory', () => $('historyOverlay').classList.add('hidden'));
+        run(refresh);
     };
-
-    window.Asc.plugin.button = function (id) {
-        this.executeCommand('close', '');
-    };
-
-})(window, undefined);
+    window.Asc.plugin.button = function () { if (!busy) this.executeCommand('close', ''); };
+})(window);

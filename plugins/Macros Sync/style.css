@@ -1,3 +1,24 @@
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+#libraryStatus { overflow-wrap: anywhere; margin-bottom: 8px; }
+.review-box { background: #fff; color: #222; width: 96vw; height: 96vh; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+#reviewChanges, #historyList { overflow: auto; flex: 1; min-height: 0; }
+.change-card { padding: 8px; margin-bottom: 12px; }
+.versions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.versions pre, .conflict-block pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
+.diff { overflow: auto; max-height: 260px; background: #f7f7f7; }
+.diff .added { background: #d7f4dc; color: #183b20; }
+.diff .removed { background: #fbd9d9; color: #572020; }
+.result-code, .result-metadata { width: 100%; min-height: 180px; font: 13px monospace; tab-size: 4; white-space: pre; }
+.result-metadata { min-height: 90px; }
+.review-controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.conflict-block { border-left: 4px solid #d28420; padding: 8px; }
+.conflict-block.resolved { border-color: #278242; }
+.history-row { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-bottom: 1px solid #aaa; overflow-wrap: anywhere; }
+.busy button, .busy input, .busy textarea { pointer-events: none; opacity: .65; }
+.dark .review-box { background: #242424; color: #eee; }
+.dark .diff { background: #333; }
+.dark .result-code, .dark .result-metadata { background: #181818; color: #eee; }
+button:disabled { opacity: .5; cursor: default; }
 * {
     box-sizing: border-box;
 }

@@ -10,6 +10,9 @@ import ru.mrnds.r7localserver.server.dto.ErrorResponse
 suspend fun ApplicationCall.handleErrors(logger: Logger, block: suspend () -> Unit) {
     try {
         block()
+    } catch (e: ru.mrnds.r7localserver.server.macros.MacroConflict) {
+        respond(HttpStatusCode.Conflict, ErrorResponse(message = e.message ?: "Refresh required"))
+        logger.warn("Macro conflict: {}", e.message)
     } catch (e: IllegalArgumentException) {
         respond(HttpStatusCode.BadRequest, ErrorResponse(message = e.message ?: "Invalid request"))
         logger.warn("Bad request: {}", e.message)

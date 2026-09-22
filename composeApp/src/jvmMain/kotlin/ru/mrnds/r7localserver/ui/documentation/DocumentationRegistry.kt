@@ -12,6 +12,7 @@ val documentationGroups = listOf(
             filesWriteDoc,
             excelExportDoc,
             macroSyncDoc,
+            versionedMacroDoc,
             proxyRequestDoc
         )
     ),

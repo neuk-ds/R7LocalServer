@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    name: Compile JVM
+    name: Build and test JVM
     runs-on: windows-latest
 
     steps:
@@ -28,5 +28,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Compile
-        run: .\gradlew.bat :composeApp:compileKotlinJvm
+      - name: Build and test
+        run: .\gradlew.bat :composeApp:jvmTest :composeApp:packageMacroPlugins --console=plain
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test macro plugins
+        run: node --test plugins/tests/*.test.cjs

@@ -215,7 +215,6 @@ class MacroSyncService {
     }
 }
 
-private fun JsonObject.guid(): String = this["guid"]?.jsonPrimitive?.contentOrNull ?: ""
 private fun JsonObject.name(): String = this["name"]?.jsonPrimitive?.contentOrNull ?: ""
 private fun JsonObject.isUniversal(): Boolean = this["isUniversal"]?.jsonPrimitive?.booleanOrNull == true
 private fun JsonObject.isSeparator(): Boolean =

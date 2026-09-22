@@ -7,6 +7,7 @@
     <script type="text/javascript" src="../v1/plugins.js"></script>
     <script type="text/javascript" src="../v1/plugins-ui.js"></script>
     <link rel="stylesheet" href="../v1/plugins.css">
+    <script type="text/javascript" src="sync-core.js"></script>
     <script type="text/javascript" src="plugin.js"></script>
 </head>
 
@@ -24,11 +25,17 @@
             <input type="text" id="fileName" placeholder="universal_macros.json" />
             <label>Папка резервных копий</label>
             <input type="text" id="backupPath" placeholder="D:\shared\backup" />
-            <label class="checkbox-label" for="autoSync">Авто-синхронизация при открытии</label>
+            <label class="checkbox-label" for="autoSync">Проверять обновления при открытии</label>
             <input type="checkbox" id="autoSync" />
         </div>
         <button id="btnSaveSettings">Сохранить настройки</button>
     </details>
+    <div class="toolbar">
+        <button id="btnImport">Включить историю</button>
+        <button id="btnHistory">История библиотеки</button>
+        <button id="btnRestoreBackup">Восстановить копию документа</button>
+    </div>
+    <div id="libraryStatus" role="status"></div>
 
     <!-- Двухколоночная область -->
     <div class="columns">
@@ -37,11 +44,12 @@
         <div class="column">
             <div class="column-header">
                 <span>Текущая книга</span>
+                <button id="btnSelectCurrent" class="btn-small">Все универсальные</button>
                 <button id="btnRefresh" class="btn-small">↺</button>
             </div>
             <div id="listCurrent" class="macro-list">Загрузка...</div>
             <div class="column-footer">
-                <button id="btnPush">Опубликовать универсальные</button>
+                <button id="btnPush">Сохранить выбранные в библиотеку…</button>
             </div>
         </div>
 
@@ -53,7 +61,7 @@
             </div>
             <div id="listSaved" class="macro-list">—</div>
             <div class="column-footer two-btn">
-                <button id="btnLoadSelected" class="primary">Загрузить выбранные</button>
+                <button id="btnLoadSelected" class="primary">Применить к документу…</button>
                 <button id="btnDeleteSelected" class="danger">Удалить из файла</button>
             </div>
         </div>
@@ -63,17 +71,24 @@
     <!-- Лог -->
     <div id="log"></div>
 
-    <!-- Модальное окно подтверждения -->
-    <div id="confirmOverlay" class="overlay hidden">
-        <div class="confirm-box">
-            <div class="confirm-title">Подтвердите действие</div>
-            <div class="confirm-msg" id="confirmMsg"></div>
-            <div class="confirm-list-label" id="conflictsLabel"></div>
-            <ul id="conflictsList"></ul>
-            <div class="confirm-buttons">
-                <button id="btnConfirmOk" class="primary">Загрузить</button>
-                <button id="btnConfirmCancel">Отмена</button>
+    <div id="reviewOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+        <div class="review-box">
+            <h2 id="reviewTitle"></h2>
+            <div id="reviewChanges"></div>
+            <label>Комментарий версии <input id="reviewComment" type="text" /></label>
+            <div id="reviewStatus" role="status"></div>
+            <div class="toolbar">
+                <button id="btnApply" class="primary">Применить</button>
+                <button id="btnRecalculate">Пересчитать</button>
+                <button id="btnCancelReview">Отмена</button>
             </div>
+        </div>
+    </div>
+    <div id="historyOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="История библиотеки">
+        <div class="review-box">
+            <h2>История библиотеки</h2>
+            <div id="historyList"></div>
+            <button id="btnCloseHistory">Закрыть</button>
         </div>
     </div>
 

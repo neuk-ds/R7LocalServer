@@ -1,6 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-val applicationVersion = "2.3.4"
+val applicationVersion = "2.4.0"
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info/kotlin")
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -11,6 +11,7 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain(21)
     jvm()
 
     sourceSets {
@@ -32,6 +33,7 @@ kotlin {
             implementation(libs.kotlin.test)
         }
         jvmMain.dependencies {
+            implementation(libs.jgit)
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.ktor.server.core)
@@ -40,11 +42,13 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.ktor.server.cors)
             implementation(libs.logback.classic)
-            implementation(libs.cronet.embedded)
             implementation(libs.kotlin.csv)
             implementation(libs.apache.poi.ooxml)
             implementation(libs.apache.httpclient5)
             implementation(libs.apache.httpclient5.win)
+        }
+        jvmTest.dependencies {
+            implementation(libs.ktor.server.test.host)
         }
     }
 }
@@ -97,6 +101,27 @@ val generateBuildInfo by tasks.registering(GenerateBuildInfoTask::class) {
 
 tasks.named("compileKotlinJvm") {
     dependsOn(generateBuildInfo)
+}
+
+val packageMacrosSyncPlugin by tasks.registering(Zip::class) {
+    group = "distribution"
+    description = "Package the versioned Macros Sync plugin for R7 Office"
+    from(rootProject.file("plugins/Macros Sync"))
+    archiveFileName.set("Macros Sync.plugin")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions/plugins"))
+}
+
+val packageMacrosSyncCompanionPlugin by tasks.registering(Zip::class) {
+    group = "distribution"
+    description = "Package the read-only Macros Sync Companion plugin"
+    from(rootProject.file("plugins/Macros Sync Companion"))
+    archiveFileName.set("Macros Sync Companion.plugin")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions/plugins"))
+}
+
+tasks.register("packageMacroPlugins") {
+    group = "distribution"
+    dependsOn(packageMacrosSyncPlugin, packageMacrosSyncCompanionPlugin)
 }
 
 abstract class GenerateBuildInfoTask : DefaultTask() {

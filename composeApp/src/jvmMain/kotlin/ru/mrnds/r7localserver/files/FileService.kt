@@ -41,14 +41,15 @@ class FileService {
         val outputDirectory = prepareDirectory(directoryPath)
 
         val file = File(outputDirectory, fileName)
-        if (file.exists() && !overwrite) {
-            throw IllegalArgumentException("File already exists")
+        ru.mrnds.r7localserver.server.macros.MacroHistoryStore.protect(file)
+        fun write(): File {
+            ru.mrnds.r7localserver.server.macros.MacroHistoryStore.protect(file)
+            if (file.exists() && !overwrite) throw IllegalArgumentException("File already exists")
+            return writer.write(file = file, content = content)
         }
-
-        return writer.write(
-            file = file,
-            content = content
-        )
+        return if (file.extension.equals("json", true)) {
+            ru.mrnds.r7localserver.server.macros.MacroHistoryStore().locked(file.canonicalFile) { write() }
+        } else write()
     }
 
     fun readFile(

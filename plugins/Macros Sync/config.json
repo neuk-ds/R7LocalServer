@@ -1,6 +1,6 @@
 {
     "guid": "asc.{9c4be932-7357-468b-bfe1-e3a379079d87}",
-    "version": "1.0",
+    "version": "2.0",
     "name": "Синхронизация макросов",
     "nameLocale": {
         "en": "Macros Sync"
@@ -38,8 +38,8 @@
             "isViewer": false,
             "initDataType": "none",
             "size": [
-                640,
-                640
+                1100,
+                800
             ],
             "buttons": [
                 {
