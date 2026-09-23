@@ -2,7 +2,6 @@
     'use strict';
     const core = window.R7SyncCore;
     const $ = id => document.getElementById(id);
-    const kinds = { added: 'Добавлен', modified: 'Изменён', deleted: 'Удалён', unchanged: 'Без изменений', conflict: 'Конфликт' };
     const settings = { serverUrl: 'http://127.0.0.1:8124', dirPath: '', fileName: 'universal_macros.json', backupPath: '' };
     let doc = { macrosArray: [] }, library = { macrosArray: [] }, state, active, busy = false;
     let currentSelection = new Set(), savedSelection = new Set();
@@ -42,66 +41,54 @@
         if (!response.ok) throw new Error(result.message || 'Ошибка сервера: ' + response.status);
         return result;
     }
-    function realMacros(data) { return data.macrosArray.filter(m => !m.isSeparator && m.guid !== '00000000-separator-0000-000000000000'); }
-    function selectionBox(set, guid) {
-        const checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.checked = set.has(guid);
-        checkbox.addEventListener('change', () => checkbox.checked ? set.add(guid) : set.delete(guid));
-        return checkbox;
+    const { isSeparator, realMacros, groups, orderedMacros, selectionBox, render, bookPositions, animateBookMove } =
+        window.R7SyncLists({
+            core, $, node, button, run,
+            getData: () => ({ doc, library, state, currentSelection, savedSelection }),
+            setUniversal, setExcluded, moveMacro
+        });
+    const { drawReview } = window.R7SyncReviewUI({ $, node, button, selectionBox, getActive: () => active });
+    async function setUniversal(guid, enabled) {
+        const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
+        const target = next.macrosArray.find(m => m.guid === guid && !isSeparator(m));
+        if (!target) throw new Error('Макрос удалён. Обновите список.');
+        const grouped = groups(next.macrosArray.filter(m => m.guid !== guid));
+        target.isUniversal = enabled;
+        if (enabled) grouped.universal.push(target);
+        else {
+            target.isExcludedFromAutoSync = false;
+            grouped.regular.unshift(target);
+        }
+        next.macrosArray = orderedMacros(grouped);
+        await core.apply(Asc.plugin, Asc.scope, latest, next);
+        await updateBook();
     }
-    function render() {
-        $('listCurrent').replaceChildren(); $('listSaved').replaceChildren();
-        const differences = state ? core.compare(doc, library) : [];
-        const differenceByGuid = new Map(differences.map(change => [change.guid, change.kind]));
-        realMacros(doc).forEach(macro => {
-            const row = node('div', null, 'row');
-            row.append(selectionBox(currentSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
-            if (differenceByGuid.has(macro.guid)) row.append(node('span', {
-                modified: 'отличается', missingLibrary: 'нет в библиотеке'
-            }[differenceByGuid.get(macro.guid)] || '', 'badge-exists'));
-            const label = node('label', null, 'universal-label');
-            const check = node('input'); check.type = 'checkbox'; check.checked = macro.isUniversal === true;
-            check.addEventListener('change', () => run(async () => {
-                const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
-                const target = next.macrosArray.find(m => m.guid === macro.guid);
-                if (!target) throw new Error('Макрос удалён. Обновите список.');
-                target.isUniversal = check.checked;
-                if (!check.checked) target.isExcludedFromAutoSync = false;
-                await core.apply(Asc.plugin, Asc.scope, latest, next);
-                await refresh();
-            }));
-            label.append(check, document.createTextNode('универсальный')); row.append(label);
-            if (macro.isUniversal) {
-                const excluded = node('input'); excluded.type = 'checkbox'; excluded.checked = !!macro.isExcludedFromAutoSync;
-                const exLabel = node('label', null, 'universal-label');
-                excluded.addEventListener('change', () => run(async () => {
-                    const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
-                    const target = next.macrosArray.find(m => m.guid === macro.guid);
-                    if (!target) throw new Error('Макрос удалён. Обновите список.');
-                    target.isExcludedFromAutoSync = excluded.checked;
-                    await core.apply(Asc.plugin, Asc.scope, latest, next); await refresh();
-                }));
-                exLabel.append(excluded, document.createTextNode('не проверять')); row.append(exLabel);
-            }
-            $('listCurrent').append(row);
-        });
-        const allLibraryIds = new Set(realMacros(library).map(m => m.guid));
-        // Deleted library macros remain visible so their deletion can be reviewed explicitly.
-        const missing = realMacros(doc).filter(m => m._r7Sync && m._r7Sync.libraryId === (library._r7Library || {}).libraryId && !allLibraryIds.has(m.guid));
-        realMacros(library).concat(missing).forEach(macro => {
-            const row = node('div', null, 'row');
-            row.append(selectionBox(savedSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
-            const label = !allLibraryIds.has(macro.guid) ? 'удалён из библиотеки' : {
-                modified: 'отличается от книги', missingDocument: 'нет в книге'
-            }[differenceByGuid.get(macro.guid)];
-            if (label) row.append(node('span', label, 'badge-exists'));
-            $('listSaved').append(row);
-        });
-        $('comparisonStatus').textContent = state ? differences.length
-            ? 'Отличий книги от библиотеки: ' + differences.length
-            : 'Макросы книги совпадают с библиотекой.' : '';
-        $('libraryStatus').textContent = !state ? '' : !state.managed ? 'История ещё не включена' :
-            state.externalChanges ? 'Обнаружены внешние изменения. Зарегистрируйте их перед синхронизацией.' : 'Версия: ' + library._r7Library.revisionId;
-        $('btnImport').textContent = state && state.managed ? 'Проверить внешние изменения' : 'Включить историю';
+    async function setExcluded(guid, excluded) {
+        const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
+        const target = next.macrosArray.find(m => m.guid === guid && !isSeparator(m));
+        if (!target) throw new Error('Макрос удалён. Обновите список.');
+        target.isExcludedFromAutoSync = excluded;
+        await core.apply(Asc.plugin, Asc.scope, latest, next);
+        await updateBook();
+    }
+    async function moveMacro(guid, direction) {
+        const latest = await core.read(Asc.plugin), next = JSON.parse(JSON.stringify(latest));
+        const grouped = groups(next.macrosArray);
+        const target = next.macrosArray.find(m => m.guid === guid && !isSeparator(m));
+        if (!target) throw new Error('Макрос удалён. Обновите список.');
+        const group = target.isUniversal === true ? grouped.universal : grouped.regular;
+        const index = group.findIndex(m => m.guid === guid), destination = index + direction;
+        if (destination < 0 || destination >= group.length) { await updateBook(); return; }
+        [group[index], group[destination]] = [group[destination], group[index]];
+        next.macrosArray = orderedMacros(grouped);
+        await core.apply(Asc.plugin, Asc.scope, latest, next);
+        await updateBook(true);
+    }
+    async function updateBook(animateMove = false) {
+        doc = await core.read(Asc.plugin);
+        const before = animateMove ? bookPositions() : null;
+        render();
+        animateBookMove(before);
     }
     async function refresh() {
         doc = await core.read(Asc.plugin);
@@ -118,94 +105,6 @@
         const response = await api('/macros/v2/preview', request);
         active = { action, request, response, selected: new Set(response.changes.map(c => c.guid)), resolutions: {}, reviewed: new Set(), editors: new Map() };
         drawReview();
-    }
-    function drawReview() {
-        const panel = $('reviewChanges'); panel.replaceChildren();
-        $('reviewTitle').textContent = ({ push: 'Сохранить в библиотеку', pull: 'Применить к документу', delete: 'Удалить из библиотеки', restore: 'Восстановить версию библиотеки', import: 'Зарегистрировать библиотеку', restoreDocument: 'Восстановить резервную копию документа' })[active.action];
-        active.response.changes.forEach(change => {
-            const card = node('details', null, 'change-card'); card.open = change.kind === 'conflict';
-            const summary = node('summary');
-            const include = selectionBox(active.selected, change.guid);
-            include.disabled = ['restore', 'import', 'restoreDocument'].includes(active.action);
-            include.addEventListener('change', updateApply);
-            summary.append(include, document.createTextNode(' ' + change.name + ' — ' + kinds[change.kind]));
-            card.append(summary);
-            const versions = node('div', null, 'versions');
-            [['База', change.base], ['Документ / входящая версия', change.document], ['Библиотека / текущая версия', change.library]].forEach(([title, macro]) => {
-                const block = node('details'); block.append(node('summary', title), node('pre', macro == null ? '(отсутствует)' : JSON.stringify(macro, null, 2)));
-                versions.append(block);
-            });
-            card.append(versions);
-            const diff = node('pre', null, 'diff');
-            change.diff.forEach(line => diff.append(node('div', String(line.oldLine || '').padStart(4) + ' ' + String(line.newLine || '').padStart(4) + ' ' + ({ added: '+', removed: '-', same: ' ' })[line.kind] + ' ' + line.text, line.kind)));
-            card.append(diff);
-            const editor = node('textarea'); editor.className = 'result-code'; editor.spellcheck = false;
-            editor.value = change.result ? change.result.value : '';
-            const metadata = node('textarea'); metadata.className = 'result-metadata'; metadata.spellcheck = false;
-            let resultMacro = change.result && JSON.parse(JSON.stringify(change.result));
-            function showResult(macro) {
-                resultMacro = macro == null ? null : JSON.parse(JSON.stringify(macro));
-                editor.value = resultMacro ? resultMacro.value : '';
-                const fields = resultMacro && Object.assign({}, resultMacro); if (fields) delete fields.value;
-                metadata.value = JSON.stringify(fields, null, 2);
-                editor.disabled = resultMacro == null;
-            }
-            showResult(change.result);
-            const controls = node('div', null, 'review-controls');
-            function choose(macro) {
-                showResult(macro);
-                active.resolutions[change.guid] = { macro: resultMacro };
-                active.reviewed.add(change.guid); updateApply();
-            }
-            controls.append(button('Взять документ', () => choose(change.document)), button('Взять библиотеку', () => choose(change.library)));
-            const decisions = new Map();
-            if (change.chunks.some(c => c.document != null)) {
-                const conflicts = node('div');
-                change.chunks.forEach((chunk, index) => {
-                    if (chunk.document == null) return;
-                    const block = node('div', null, 'conflict-block');
-                    block.append(node('pre', 'Документ:\n' + chunk.document + '\nБиблиотека:\n' + chunk.library));
-                    function pick(side) {
-                        decisions.set(index, chunk[side]);
-                        editor.value = change.chunks.map((c, i) => c.document == null ? c.text : decisions.has(i) ? decisions.get(i) : c.document).join('');
-                        active.reviewed.delete(change.guid);
-                        active.resolutions[change.guid] = { macro: resultMacro }; updateApply();
-                        block.classList.add('resolved');
-                    }
-                    block.append(button('Участок из документа', () => pick('document')), button('Участок из библиотеки', () => pick('library')));
-                    conflicts.append(block);
-                });
-                card.append(conflicts);
-            }
-            controls.append(button('Подтвердить итог этого макроса', () => {
-                let fields = JSON.parse(metadata.value);
-                if (fields != null) {
-                    if (fields.guid !== change.guid) throw new Error('GUID результата нельзя менять');
-                    fields.value = editor.value;
-                }
-                resultMacro = fields;
-                active.resolutions[change.guid] = { macro: fields };
-                active.reviewed.add(change.guid); updateApply();
-            }));
-            const edited = () => { active.reviewed.delete(change.guid); active.resolutions[change.guid] = { macro: resultMacro }; updateApply(); };
-            editor.addEventListener('input', edited); metadata.addEventListener('input', edited);
-            card.append(node('div', 'Итоговый код'), editor, node('div', 'Итоговые свойства (null — удалить макрос)'), metadata, controls);
-            if (['import', 'restore', 'restoreDocument', 'delete'].includes(active.action)) {
-                editor.readOnly = true; metadata.readOnly = true; controls.replaceChildren();
-            }
-            panel.append(card);
-        });
-        if (!active.response.changes.length) panel.append(node('p', 'Изменений макросов нет. Можно зарегистрировать исходное состояние библиотеки.'));
-        $('reviewOverlay').classList.remove('hidden');
-        $('reviewComment').value = '';
-        updateApply();
-    }
-    function updateApply() {
-        if (!active) return;
-        const unresolved = active.response.changes.filter(c => active.selected.has(c.guid) &&
-            (c.conflicts.length || Object.prototype.hasOwnProperty.call(active.resolutions, c.guid)) && !active.reviewed.has(c.guid));
-        $('reviewStatus').textContent = unresolved.length ? 'Требуют подтверждения: ' + unresolved.map(c => c.name).join(', ') : 'Итог готов к применению';
-        $('btnApply').disabled = unresolved.length > 0;
     }
     async function applyReview() {
         if (!active) return;

@@ -20,7 +20,7 @@
       "isModal": false,
       "isSystem": true,
       "isViewer": false,
-      "isInsideMode": true,
+      "isInsideMode": false,
       "initDataType": "none",
       "buttons": []
     }

@@ -46,7 +46,7 @@
         status('Проверка обновлений…', 'checking');
         try {
             if (localStorage.getItem('macrosSync_autoSync') !== 'true') {
-                status('Проверка выключена. Включите её в настройках «Синхронизация макросов».', 'idle');
+                Asc.plugin.executeCommand('close', '')
                 return;
             }
             const directoryPath = localStorage.getItem('macrosSync_dirPath');
@@ -90,7 +90,7 @@
                     changed.push({ guid, name: current.name, kind: 'missingLibrary' });
             }
             if (!changed.length) {
-                status('Отличий от библиотеки нет.', 'ok');
+                Asc.plugin.executeCommand('close', '')
                 return;
             }
             for (const change of changed) {

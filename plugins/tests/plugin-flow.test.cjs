@@ -7,24 +7,33 @@ const path = require('node:path');
 // Minimal DOM double for testing event/data flow; visual checks still run in R7.
 class Element {
     constructor(tag = 'div') {
-        this.tag = tag; this.children = []; this.listeners = {}; this.value = ''; this.textContent = ''; this.disabled = false;
+        this.tag = tag; this.children = []; this.listeners = {}; this.value = ''; this.textContent = ''; this.disabled = false; this.scrollTop = 0;
         const classes = new Set();
         this.classList = { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c) };
     }
     append(...children) { this.children.push(...children); }
-    replaceChildren(...children) { this.children = children; }
+    replaceChildren(...children) { this.children = children; this.scrollTop = 0; }
+    setAttribute(name, value) { this[name] = value; }
     addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); }
     async click() { if (!this.disabled) await Promise.all((this.listeners.click || []).map(fn => fn())); }
+    async change(checked) { this.checked = checked; await Promise.all((this.listeners.change || []).map(fn => fn())); }
 }
 function all(root) { return [root, ...root.children.flatMap(all)]; }
+function bookRow(ui, name) { return ui.elements.listCurrent.children.find(row => row.children[1]?.textContent === name); }
+function universalBox(row) { return row.children.find(child => child.className === 'universal-label').children[0]; }
+function ids(ui) { return ui.current.macrosArray.map(m => m.guid); }
 const macro = value => ({ guid: 'one', name: 'One', value, isUniversal: true });
 const documentOf = value => ({ macrosArray: [macro(value)], current: 0 });
-async function harness(action = 'push', conflict = false, emptyBook = false, serverUnavailable = false) {
+async function harness(action = 'push', conflict = false, emptyBook = false, serverUnavailable = false, withSeparator = false) {
     const pluginDirectory = path.join(__dirname, '../Macros Sync');
     const html = fs.readFileSync(path.join(pluginDirectory, 'index.html'), 'utf8');
     const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
     const body = new Element('body');
     let current = emptyBook ? null : documentOf('document'), writes = 0;
+    if (withSeparator) current.macrosArray.push(
+        { guid: '00000000-separator-0000-000000000000', name: ' ', value: '', isSeparator: true },
+        { guid: 'personal', name: 'Personal', value: 'local', isUniversal: false }
+    );
     const calls = [];
     const settings = new Map([['macrosSync_dirPath', 'shared']]);
     const document = { body, getElementById: id => { if (!elements[id]) throw Error('Missing UI element: ' + id); return elements[id]; },
@@ -56,8 +65,9 @@ async function harness(action = 'push', conflict = false, emptyBook = false, ser
             return { ok: true, status: 200, json: async () => data };
         }
     });
-    vm.runInContext(fs.readFileSync(path.join(pluginDirectory, 'sync-core.js'), 'utf8'), context);
-    vm.runInContext(fs.readFileSync(path.join(pluginDirectory, 'plugin.js'), 'utf8'), context);
+    for (const [, script] of html.matchAll(/<script[^>]+src="([^"]+)"[^>]*>/g)) {
+        if (!script.startsWith('../')) vm.runInContext(fs.readFileSync(path.join(pluginDirectory, script), 'utf8'), context);
+    }
     plugin.init();
     for (let i = 0; i < 20 && body.classList.contains('busy'); i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(body.classList.contains('busy'), false);
@@ -79,6 +89,55 @@ test('main plugin shows direct differences against the library', async () => {
     const empty = await harness('pull', false, true);
     assert.equal(empty.elements.comparisonStatus.textContent, 'Отличий книги от библиотеки: 1');
     assert.equal(empty.elements.listSaved.children[0].children[2].textContent, 'нет в книге');
+});
+test('main plugin displays the book separator without allowing it to be selected', async () => {
+    const ui = await harness('push', false, false, false, true);
+    const rows = ui.elements.listCurrent.children;
+    assert.equal(rows.length, 3);
+    assert.equal(rows[1].role, 'separator');
+    assert.equal(rows[1].children[0].textContent, 'Разделитель');
+    assert.equal(rows[1].children.length, 1);
+    assert.equal(rows[2].children[1].textContent, 'Personal');
+    await ui.open();
+    const preview = ui.calls.find(c => c.url.endsWith('/preview'));
+    assert.deepEqual(preview.request.selectedGuids, ['one']);
+});
+test('changing universal status moves the macro across the separator and removes an unused separator', async () => {
+    const ui = await harness('push', false, false, false, true);
+    await universalBox(bookRow(ui, 'Personal')).change(true);
+    assert.deepEqual(ids(ui), ['one', 'personal', '00000000-separator-0000-000000000000']);
+    await universalBox(bookRow(ui, 'One')).change(false);
+    assert.deepEqual(ids(ui), ['personal', '00000000-separator-0000-000000000000', 'one']);
+    await universalBox(bookRow(ui, 'Personal')).change(false);
+    assert.deepEqual(ids(ui), ['personal', 'one']);
+    assert.equal(ui.writes, 3);
+});
+test('the first universal macro creates the book separator', async () => {
+    const ui = await harness();
+    await universalBox(bookRow(ui, 'One')).change(false);
+    assert.deepEqual(ids(ui), ['one']);
+    await universalBox(bookRow(ui, 'One')).change(true);
+    assert.deepEqual(ids(ui), ['one', '00000000-separator-0000-000000000000']);
+});
+test('move buttons change book order only within the same group', async () => {
+    const ui = await harness('push', false, false, false, true);
+    ui.current.macrosArray.splice(1, 0, { guid: 'two', name: 'Two', value: 'code', isUniversal: true });
+    ui.current.macrosArray.push({ guid: 'other', name: 'Other', value: 'code', isUniversal: false });
+    await ui.elements.btnRefresh.click();
+    assert.equal(bookRow(ui, 'One').children.at(-1).children[0].disabled, true);
+    assert.equal(bookRow(ui, 'Two').children.at(-1).children[1].disabled, true);
+    assert.equal(bookRow(ui, 'Personal').children.at(-1).children[0].disabled, true);
+    ui.elements.listCurrent.scrollTop = 48;
+    ui.elements.listSaved.scrollTop = 24;
+    const stateRequests = ui.calls.filter(c => c.url.endsWith('/state')).length;
+    await bookRow(ui, 'Personal').children.at(-1).children[1].click();
+    assert.deepEqual(ids(ui), ['one', 'two', '00000000-separator-0000-000000000000', 'other', 'personal']);
+    assert.equal(ui.elements.listCurrent.scrollTop, 48);
+    assert.equal(ui.elements.listSaved.scrollTop, 24);
+    assert.equal(ui.calls.filter(c => c.url.endsWith('/state')).length, stateRequests);
+    await bookRow(ui, 'Two').children.at(-1).children[0].click();
+    assert.deepEqual(ids(ui), ['two', 'one', '00000000-separator-0000-000000000000', 'other', 'personal']);
+    assert.equal(ui.writes, 2);
 });
 test('publishing from review calls v2 apply and never writes the document', async () => {
     const ui = await harness(); await ui.open(); await ui.elements.btnApply.click();

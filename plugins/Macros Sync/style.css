@@ -168,11 +168,20 @@ button.danger:hover {
 
 .sep-row {
     background: #fafafa;
+    gap: 10px;
+}
+
+.sep-row::before, .sep-row::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #d0d0d0;
 }
 
 .sep-row .name {
+    flex: 0 0 auto;
     font-style: italic;
-    color: #aaa;
+    color: #777;
     font-size: 11px;
 }
 
@@ -199,6 +208,18 @@ button.danger:hover {
 
 .select-cb {
     flex-shrink: 0;
+}
+
+.move-controls {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.move-controls button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
 }
 
 .badge-exists {
@@ -379,8 +400,12 @@ body.dark .sep-row {
     background: #313131;
 }
 
+body.dark .sep-row::before, body.dark .sep-row::after {
+    background: #555;
+}
+
 body.dark .sep-row .name {
-    color: #666;
+    color: #aaa;
 }
 
 body.dark .name {

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
-const core = require('../Macros Sync/sync-core.js');
+const core = require('../Macros Sync/resources/libs/sync-core.js');
 
 function editor(initial, transform = x => x, encode = JSON.stringify) {
     let data = structuredClone(initial), writes = 0;
@@ -120,12 +120,16 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     }
     const elements = Object.fromEntries(['status', 'changes', 'refresh'].map(id => [id, new Element()]));
     const body = { classList: { add() {} } };
-    let raw = initial, writes = 0;
+    let raw = initial, writes = 0, closes = 0;
     const requests = [];
     let context;
-    const plugin = { callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); } };
+    const plugin = {
+        callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); },
+        executeCommand(command) { assert.equal(command, 'close'); closes++; }
+    };
+    const window = { Asc: { plugin } };
     context = vm.createContext({
-        window: { Asc: { plugin } },
+        window, Asc: window.Asc,
         document: { body, getElementById: id => elements[id], createElement: () => new Element() },
         localStorage: { getItem: key => settings[key] }, console: { warn() {} }, setTimeout, clearTimeout,
         Api: { pluginMethod_GetMacros: () => raw, pluginMethod_SetMacros: () => { writes++; } },
@@ -133,7 +137,7 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Macros Sync Companion/companion.js'), 'utf8'), context);
     plugin.init();
-    return { elements, requests, settings, set raw(value) { raw = value; }, get writes() { return writes; },
+    return { elements, requests, settings, set raw(value) { raw = value; }, get writes() { return writes; }, get closes() { return closes; },
         async settle() { for (let i = 0; i < 10 && elements.refresh.disabled; i++) await new Promise(resolve => setImmediate(resolve)); } };
 }
 test('Companion compares book code directly with library, even when only the book changed', async () => {
@@ -151,13 +155,14 @@ test('Companion compares book code directly with library, even when only the boo
     assert.equal(ui.elements.status.textContent, 'Найдены отличия: 1');
     assert.equal(ui.elements.changes.children[0].children[0].textContent, 'One');
     assert.equal(ui.elements.changes.children[0].children[1].textContent, 'Отличается от библиотеки');
+    assert.equal(ui.closes, 0);
     assert.equal(ui.writes, 0);
 });
 test('Companion ignores local flags and property order when contents match', async () => {
     const ui = companion(JSON.stringify({ macrosArray: [{ value: 'same', guid: 'one', name: 'One', isUniversal: true, _r7Sync: {} }] }),
         undefined, { library: { macrosArray: [{ name: 'One', guid: 'one', value: 'same' }] } });
     await ui.settle();
-    assert.equal(ui.elements.status.textContent, 'Отличий от библиотеки нет.');
+    assert.equal(ui.closes, 1);
     assert.equal(ui.elements.changes.children.length, 0);
 });
 test('Companion shows library macros missing from a new book and local universal macros', async () => {
@@ -169,17 +174,16 @@ test('Companion shows library macros missing from a new book and local universal
     assert.equal(ui.elements.status.textContent, 'Найдены отличия: 2');
     assert.equal(ui.elements.changes.children[1].children[1].textContent, 'Нет в библиотеке');
 });
-test('Companion panel explains disabled checking', async () => {
-    const ui = companion(undefined);
+test('Companion closes without reading the book when checking is disabled', async () => {
+    const ui = companion(undefined, { macrosSync_autoSync: 'false', macrosSync_dirPath: 'shared' });
     await ui.settle();
-    ui.settings.macrosSync_autoSync = 'false';
-    await ui.elements.refresh.click();
-    assert.match(ui.elements.status.textContent, /Проверка выключена/);
-    assert.equal(ui.requests.length, 1);
+    assert.equal(ui.closes, 1);
+    assert.equal(ui.requests.length, 0);
 });
 test('Companion panel shows server errors', async () => {
     const ui = companion(undefined, undefined, { broken: true });
     await ui.settle();
     assert.match(ui.elements.status.textContent, /некорректную библиотеку/);
     assert.equal(ui.elements.status.dataset.state, 'error');
+    assert.equal(ui.closes, 0);
 });
