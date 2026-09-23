@@ -119,13 +119,14 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
         click() { return this.listeners.click(); }
     }
     const elements = Object.fromEntries(['status', 'changes', 'refresh'].map(id => [id, new Element()]));
+    const body = { classList: { add() {} } };
     let raw = initial, writes = 0;
     const requests = [];
     let context;
     const plugin = { callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); } };
     context = vm.createContext({
         window: { Asc: { plugin } },
-        document: { getElementById: id => elements[id], createElement: () => new Element() },
+        document: { body, getElementById: id => elements[id], createElement: () => new Element() },
         localStorage: { getItem: key => settings[key] }, console: { warn() {} }, setTimeout, clearTimeout,
         Api: { pluginMethod_GetMacros: () => raw, pluginMethod_SetMacros: () => { writes++; } },
         fetch: async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return { ok: true, json: async () => response }; }

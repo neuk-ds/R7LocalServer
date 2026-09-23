@@ -5,6 +5,10 @@
 #define AppPublisher "Дмитрий Неук"
 #define AppExeName "R7LocalServer.exe"
 #define AppSourceDir "..\build\compose\binaries\main\app\R7LocalServer"
+#define PluginsSourceDir "..\..\plugins"
+#define R7PluginsDir "{localappdata}\R7-Office\Editors\data\sdkjs-plugins"
+#define MacrosSyncDir R7PluginsDir + "\{{9c4be932-7357-468b-bfe1-e3a379079d87}"
+#define MacrosSyncCompanionDir R7PluginsDir + "\{{dbba06c0-1008-4672-a3c3-a22215388e8d}"
 
 [Setup]
 AppId={{3881d6da-9f4a-4b93-82d3-2ced610b5bad}
@@ -35,6 +39,9 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Files]
 Source: "{#AppSourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; R7 Office registers plugins itself. Update only folders that already exist.
+Source: "{#PluginsSourceDir}\Macros Sync\*"; DestDir: "{#MacrosSyncDir}"; Flags: recursesubdirs createallsubdirs ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncDir}'))
+Source: "{#PluginsSourceDir}\Macros Sync Companion\*"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: recursesubdirs createallsubdirs ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncCompanionDir}'))
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"

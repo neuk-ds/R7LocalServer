@@ -114,6 +114,7 @@
     }
 
     window.Asc.plugin.init = function () {
+        if ((localStorage.getItem('ui-theme') || '').includes('dark')) document.body.classList.add('dark');
         $('refresh').addEventListener('click', check);
         check();
     };

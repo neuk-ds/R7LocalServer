@@ -54,3 +54,24 @@ button:disabled { opacity: .55; cursor: default; }
 
 .kind { flex-shrink: 0; color: #666; font-size: 11px; }
 .hint { margin-top: 18px; color: #666; font-size: 12px; }
+
+body.dark {
+    background: #2b2b2b;
+    color: #f2f2f2;
+    color-scheme: dark;
+}
+
+body.dark button {
+    background: #3a3a3a;
+    border-color: #555;
+    color: #f2f2f2;
+}
+
+body.dark button:hover:not(:disabled) { background: #444; }
+
+body.dark #status { background: #383838; }
+body.dark #status[data-state="ok"] { background: #1e3b2a; color: #b9e5c4; }
+body.dark #status[data-state="changes"] { background: #49371b; color: #f4d28e; }
+body.dark #status[data-state="error"] { background: #4a2624; color: #f3aaa3; }
+body.dark #changes li { border-color: #444; }
+body.dark .kind, body.dark .hint { color: #b0b0b0; }
