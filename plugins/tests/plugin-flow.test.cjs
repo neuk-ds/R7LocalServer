@@ -19,17 +19,17 @@ class Element {
 function all(root) { return [root, ...root.children.flatMap(all)]; }
 const macro = value => ({ guid: 'one', name: 'One', value, isUniversal: true });
 const documentOf = value => ({ macrosArray: [macro(value)], current: 0 });
-async function harness(action = 'push', conflict = false) {
+async function harness(action = 'push', conflict = false, emptyBook = false, serverUnavailable = false) {
     const pluginDirectory = path.join(__dirname, '../Macros Sync');
     const html = fs.readFileSync(path.join(pluginDirectory, 'index.html'), 'utf8');
     const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
     const body = new Element('body');
-    let current = documentOf('document'), writes = 0;
+    let current = emptyBook ? null : documentOf('document'), writes = 0;
     const calls = [];
     const settings = new Map([['macrosSync_dirPath', 'shared']]);
     const document = { body, getElementById: id => { if (!elements[id]) throw Error('Missing UI element: ' + id); return elements[id]; },
         createElement: tag => new Element(tag), createTextNode: text => { const node = new Element('text'); node.textContent = text; return node; } };
-    const expected = structuredClone(current);
+    const expected = emptyBook ? { macrosArray: [] } : structuredClone(current);
     const source = { macrosArray: [macro('library')], _r7Library: { revisionId: 'revision', libraryId: 'library' } };
     const result = macro('merged');
     let context;
@@ -38,14 +38,15 @@ async function harness(action = 'push', conflict = false) {
     context = vm.createContext({
         window, Asc: window.Asc, document, console, setTimeout, clearTimeout,
         localStorage: { getItem: key => settings.get(key), setItem: (key, value) => settings.set(key, value) },
-        Api: { pluginMethod_GetMacros: () => JSON.stringify(current), pluginMethod_SetMacros: json => { current = JSON.parse(json); writes++; } },
+        Api: { pluginMethod_GetMacros: () => current === null ? undefined : JSON.stringify(current), pluginMethod_SetMacros: json => { current = JSON.parse(json); writes++; } },
         fetch: async (url, options) => {
+            if (serverUnavailable) throw new TypeError('Failed to fetch');
             const request = JSON.parse(options.body); calls.push({ url, request });
             let data;
             if (url.endsWith('/state')) data = { library: source, managed: true, externalChanges: false };
             else if (url.endsWith('/preview')) data = { token: 'token', operationId: 'operation', changes: [{
-                guid: 'one', name: 'One', kind: conflict ? 'conflict' : 'modified', base: null,
-                document: macro('document'), library: macro('library'), result,
+                guid: 'one', name: 'One', kind: conflict ? 'conflict' : emptyBook ? 'added' : 'modified', base: null,
+                document: emptyBook ? null : macro('document'), library: macro('library'), result,
                 conflicts: conflict ? ['base'] : [], chunks: [], diff: [{ kind: 'added', text: 'merged', oldLine: null, newLine: 1 }]
             }] };
             else if (url.endsWith('/apply')) data = action === 'push' ? { revisionId: 'saved', changed: true } : {
@@ -69,6 +70,15 @@ test('opening and cancelling review does not write the document or library', asy
     await ui.elements.btnCancelReview.click();
     assert.equal(ui.writes, 0);
     assert.equal(ui.calls.filter(c => c.url.endsWith('/apply')).length, 0);
+});
+test('main plugin shows direct differences against the library', async () => {
+    const ui = await harness('pull');
+    assert.equal(ui.elements.comparisonStatus.textContent, 'Отличий книги от библиотеки: 1');
+    assert.equal(ui.elements.listCurrent.children[0].children[2].textContent, 'отличается');
+    assert.equal(ui.elements.listSaved.children[0].children[2].textContent, 'отличается от книги');
+    const empty = await harness('pull', false, true);
+    assert.equal(empty.elements.comparisonStatus.textContent, 'Отличий книги от библиотеки: 1');
+    assert.equal(empty.elements.listSaved.children[0].children[2].textContent, 'нет в книге');
 });
 test('publishing from review calls v2 apply and never writes the document', async () => {
     const ui = await harness(); await ui.open(); await ui.elements.btnApply.click();
@@ -97,4 +107,21 @@ test('loading verifies and applies the prepared document once', async () => {
     assert.equal(ui.writes, 1);
     assert.equal(ui.current.macrosArray[0].value, 'merged');
     assert.match(ui.elements.log.textContent, /Резервная копия/);
+});
+test('a new book with no GetMacros value can load a library macro', async () => {
+    const ui = await harness('pull', false, true);
+    assert.equal(ui.elements.listCurrent.children.length, 0);
+    assert.equal(ui.elements.listSaved.children.length, 1);
+    await ui.open();
+    assert.deepEqual(ui.calls.find(c => c.url.endsWith('/preview')).request.document, { macrosArray: [] });
+    await ui.elements.btnApply.click();
+    assert.equal(ui.writes, 1);
+    assert.equal(ui.current.macrosArray[0].value, 'merged');
+});
+test('an unavailable server does not leave a new book stuck on loading', async () => {
+    const ui = await harness('pull', false, true, true);
+    assert.equal(ui.elements.listCurrent.children.length, 0);
+    assert.equal(ui.elements.listSaved.children.length, 0);
+    assert.match(ui.elements.log.textContent, /Не удалось обратиться к серверу http:\/\/127\.0\.0\.1:8124\/macros\/v2\/state/);
+    assert.equal(ui.writes, 0);
 });

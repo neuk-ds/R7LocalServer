@@ -11,6 +11,17 @@ internal object MacroMerge {
     fun change(guid: String, base: JsonObject?, document: JsonObject?, library: JsonObject?, pull: Boolean): MacroChange {
         val ours = document?.clean()
         val theirs = library?.clean()
+        if (pull) {
+            // Loading uses the library as the source of truth; publishing still uses the base for merging.
+            val kind = when {
+                ours == theirs -> "unchanged"
+                ours == null -> "added"
+                theirs == null -> "deleted"
+                else -> "modified"
+            }
+            return MacroChange(guid, (theirs ?: ours ?: base)?.string("name") ?: guid,
+                kind, base, ours, theirs, theirs, diff = diff(ours?.string("value") ?: "", theirs?.string("value") ?: ""))
+        }
         val conflicts = mutableListOf<String>()
         var chunks = emptyList<CodeChunk>()
         val result = when {
@@ -24,7 +35,7 @@ internal object MacroMerge {
             theirs == base -> ours
             ours == null || theirs == null -> {
                 conflicts += "deletion"
-                if (pull) theirs else ours
+                ours
             }
             else -> buildJsonObject {
                 (base.keys + ours.keys + theirs.keys).forEach { key ->
@@ -44,7 +55,7 @@ internal object MacroMerge {
                 }
             }
         }
-        val target = if (pull) ours else theirs
+        val target = theirs
         val kind = when {
             conflicts.isNotEmpty() -> "conflict"
             target == result -> "unchanged"

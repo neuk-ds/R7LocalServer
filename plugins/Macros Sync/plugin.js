@@ -27,9 +27,15 @@
     }
     function paths() { return { directoryPath: $('dirPath').value.trim(), fileName: $('fileName').value.trim() }; }
     async function api(path, body) {
-        const response = await fetch($('serverUrl').value.trim().replace(/\/$/, '') + path, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        });
+        const url = $('serverUrl').value.trim().replace(/\/$/, '') + path;
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+        } catch (error) {
+            throw new Error('Не удалось обратиться к серверу ' + url + '. Проверьте, что R7LocalServer запущен, а адрес и порт верны.');
+        }
         if (response.status === 404 && path.startsWith('/macros/v2')) throw new Error('Требуется обновить R7LocalServer до версии с Macros Sync v2.');
         let result;
         try { result = await response.json(); } catch (_) { throw new Error('Сервер вернул некорректный ответ'); }
@@ -44,9 +50,14 @@
     }
     function render() {
         $('listCurrent').replaceChildren(); $('listSaved').replaceChildren();
+        const differences = state ? core.compare(doc, library) : [];
+        const differenceByGuid = new Map(differences.map(change => [change.guid, change.kind]));
         realMacros(doc).forEach(macro => {
             const row = node('div', null, 'row');
             row.append(selectionBox(currentSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
+            if (differenceByGuid.has(macro.guid)) row.append(node('span', {
+                modified: 'отличается', missingLibrary: 'нет в библиотеке'
+            }[differenceByGuid.get(macro.guid)] || '', 'badge-exists'));
             const label = node('label', null, 'universal-label');
             const check = node('input'); check.type = 'checkbox'; check.checked = macro.isUniversal === true;
             check.addEventListener('change', () => run(async () => {
@@ -79,15 +90,23 @@
         realMacros(library).concat(missing).forEach(macro => {
             const row = node('div', null, 'row');
             row.append(selectionBox(savedSelection, macro.guid), node('span', macro.name || macro.guid, 'name'));
-            if (!allLibraryIds.has(macro.guid)) row.append(node('span', 'удалён из библиотеки', 'badge-exists'));
+            const label = !allLibraryIds.has(macro.guid) ? 'удалён из библиотеки' : {
+                modified: 'отличается от книги', missingDocument: 'нет в книге'
+            }[differenceByGuid.get(macro.guid)];
+            if (label) row.append(node('span', label, 'badge-exists'));
             $('listSaved').append(row);
         });
+        $('comparisonStatus').textContent = state ? differences.length
+            ? 'Отличий книги от библиотеки: ' + differences.length
+            : 'Макросы книги совпадают с библиотекой.' : '';
         $('libraryStatus').textContent = !state ? '' : !state.managed ? 'История ещё не включена' :
             state.externalChanges ? 'Обнаружены внешние изменения. Зарегистрируйте их перед синхронизацией.' : 'Версия: ' + library._r7Library.revisionId;
         $('btnImport').textContent = state && state.managed ? 'Проверить внешние изменения' : 'Включить историю';
     }
     async function refresh() {
         doc = await core.read(Asc.plugin);
+        state = undefined; library = { macrosArray: [] };
+        render();
         state = await api('/macros/v2/state', paths()); library = state.library;
         render();
     }

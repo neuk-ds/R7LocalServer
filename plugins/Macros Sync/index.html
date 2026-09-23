@@ -25,7 +25,7 @@
             <input type="text" id="fileName" placeholder="universal_macros.json" />
             <label>Папка резервных копий</label>
             <input type="text" id="backupPath" placeholder="D:\shared\backup" />
-            <label class="checkbox-label" for="autoSync">Проверять обновления при открытии</label>
+            <label class="checkbox-label" for="autoSync">Проверять обновления в Companion</label>
             <input type="checkbox" id="autoSync" />
         </div>
         <button id="btnSaveSettings">Сохранить настройки</button>
@@ -36,6 +36,7 @@
         <button id="btnRestoreBackup">Восстановить копию документа</button>
     </div>
     <div id="libraryStatus" role="status"></div>
+    <div id="comparisonStatus" role="status"></div>
 
     <!-- Двухколоночная область -->
     <div class="columns">

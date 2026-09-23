@@ -1,7 +1,7 @@
 {
   "guid": "asc.{dbba06c0-1008-4672-a3c3-a22215388e8d}",
-  "version": "2.0",
-  "name": "Синхронизация макросов",
+  "version": "2.1",
+  "name": "Проверка макросов",
   "nameLocale": {
     "en": "Macros Sync Companion"
   },
@@ -16,9 +16,9 @@
         "icon.svg",
         "icon.svg"
       ],
-      "isVisual": false,
+      "isVisual": true,
       "isModal": false,
-      "isSystem": true,
+      "isSystem": false,
       "isViewer": false,
       "isInsideMode": true,
       "initDataType": "none",

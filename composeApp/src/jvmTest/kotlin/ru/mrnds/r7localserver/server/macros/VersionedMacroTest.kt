@@ -38,17 +38,41 @@ class VersionedMacroTest {
         assertEquals("A\nb\nC", MacroMerge.change("one", base, code(base, "A\nb\nc"), code(base, "a\nb\nC"), false).result!!.string("value"))
     }
 
-    @Test fun `empty base with overlapping additions can be previewed in both directions`() {
+    @Test fun `empty base with overlapping additions can be previewed for push`() {
         val base = macro("").clean()
         for ((documentCode, libraryCode) in listOf("a" to "b\na", "a\n" to "a\nb")) {
-            for (pull in listOf(false, true)) {
-                val change = MacroMerge.change("one", base, code(base, documentCode), code(base, libraryCode), pull)
-                assertEquals("conflict", change.kind)
-                assertEquals(listOf("value"), change.conflicts)
-                assertEquals(documentCode, change.result!!.string("value"))
-                assertTrue(change.chunks.any { it.document != null && it.library != null })
-            }
+            val change = MacroMerge.change("one", base, code(base, documentCode), code(base, libraryCode), false)
+            assertEquals("conflict", change.kind)
+            assertEquals(listOf("value"), change.conflicts)
+            assertEquals(documentCode, change.result!!.string("value"))
+            assertTrue(change.chunks.any { it.document != null && it.library != null })
         }
+    }
+
+    @Test fun `pull always proposes the library macro`() {
+        val base = macro().clean()
+        val changedInBook = code(base, "book")
+        val changedInLibrary = code(base, "library")
+        for (knownBase in listOf(base, null)) {
+            val change = MacroMerge.change("one", knownBase, changedInBook, changedInLibrary, true)
+            assertEquals("modified", change.kind)
+            assertEquals(emptyList(), change.conflicts)
+            assertEquals("library", change.result!!.string("value"))
+        }
+        assertEquals("deleted", MacroMerge.change("one", base, changedInBook, null, true).kind)
+        assertEquals("added", MacroMerge.change("one", null, null, changedInLibrary, true).kind)
+    }
+
+    @Test fun `pull replaces a book-only edit with the library version after backup`() = Fixture().use { f ->
+        f.apply(f.preview("push", document(macro())))
+        val loaded = f.apply(f.preview("pull", document(macro()))).document!!
+        val editedBook = document(code(loaded.macros().single(), "book edit"))
+        val preview = f.preview("pull", editedBook)
+        assertEquals("modified", preview.changes.single().kind)
+        assertEquals("a\nb\nc\n", preview.changes.single().result!!.string("value"))
+        val applied = f.apply(preview)
+        assertEquals(editedBook, macroJson.parseToJsonElement(File(applied.backupPath!!).readText()))
+        assertEquals("a\nb\nc\n", applied.document!!.macros().single().string("value"))
     }
 
     @Test fun `another JVM holds the library lock and prevents writing`() = Fixture().use { f ->
@@ -109,11 +133,11 @@ class VersionedMacroTest {
 
     @Test fun `overlap and missing base require resolution`() {
         val base = macro().clean()
-        val overlap = MacroMerge.change("one", base, code(base, "A\nb\nc\n"), code(base, "X\nb\nc\n"), true)
+        val overlap = MacroMerge.change("one", base, code(base, "A\nb\nc\n"), code(base, "X\nb\nc\n"), false)
         assertEquals(listOf("value"), overlap.conflicts)
         assertTrue(overlap.chunks.any { it.document == "A\n" && it.library == "X\n" })
-        assertEquals(listOf("base"), MacroMerge.change("one", null, base, code(base, "changed"), true).conflicts)
-        assertEquals(listOf("deletion"), MacroMerge.change("one", base, code(base, "changed"), null, true).conflicts)
+        assertEquals(listOf("base"), MacroMerge.change("one", null, base, code(base, "changed"), false).conflicts)
+        assertEquals(listOf("deletion"), MacroMerge.change("one", base, code(base, "changed"), null, false).conflicts)
     }
 
     @Test fun `unknown fields merge independently and conflicting names are reported`() {
@@ -141,7 +165,7 @@ class VersionedMacroTest {
         assertEquals(2, f.service.history(f.location).size)
     }
 
-    @Test fun `push keeps document untouched and pull preserves unpublished local edits`() = Fixture().use { f ->
+    @Test fun `push keeps document untouched and pull applies the library version`() = Fixture().use { f ->
         f.apply(f.preview("push", document(macro())))
         val loaded = f.apply(f.preview("pull", document(macro()))).document!!
         val tracked = loaded.macros().single()
@@ -150,13 +174,13 @@ class VersionedMacroTest {
         f.apply(f.preview("push", document(remote)))
         val localDoc = document(local, macro("private", "private", false))
         val pull = f.preview("pull", localDoc)
-        assertEquals("A\nb\nC\n", pull.changes.single().result!!.string("value"))
+        assertEquals("a\nb\nC\n", pull.changes.single().result!!.string("value"))
         val result = f.apply(pull)
         assertNotNull(result.backupPath)
         assertEquals(localDoc, macroJson.parseToJsonElement(File(result.backupPath).readText()))
-        val merged = result.document!!.macros().first()
-        assertEquals("A\nb\nC\n", merged.string("value"))
-        assertEquals("a\nb\nC\n", merged[SYNC_META]!!.jsonObject["base"]!!.jsonObject.string("value"))
+        val loadedFromLibrary = result.document!!.macros().first()
+        assertEquals("a\nb\nC\n", loadedFromLibrary.string("value"))
+        assertEquals("a\nb\nC\n", loadedFromLibrary[SYNC_META]!!.jsonObject["base"]!!.jsonObject.string("value"))
         assertEquals("private", result.document.macros().last().string("value"))
         val push = f.preview("push", localDoc)
         val saved = f.apply(push)
