@@ -76,6 +76,8 @@ internal object MacroMerge {
         val merged = MergeAlgorithm().merge(RawTextComparator.DEFAULT, texts[0], texts[1], texts[2])
         val result = mutableListOf<CodeChunk>()
         for (chunk in merged) {
+            // JGit may return an invalid range for this bookkeeping chunk; it is never part of the result.
+            if (chunk.conflictState == ConflictState.BASE_CONFLICTING_RANGE) continue
             val raw = texts[chunk.sequenceIndex]
             val text = if (chunk.begin == chunk.end) "" else raw.getString(chunk.begin, chunk.end, false)
             when (chunk.conflictState) {

@@ -38,6 +38,19 @@ class VersionedMacroTest {
         assertEquals("A\nb\nC", MacroMerge.change("one", base, code(base, "A\nb\nc"), code(base, "a\nb\nC"), false).result!!.string("value"))
     }
 
+    @Test fun `empty base with overlapping additions can be previewed in both directions`() {
+        val base = macro("").clean()
+        for ((documentCode, libraryCode) in listOf("a" to "b\na", "a\n" to "a\nb")) {
+            for (pull in listOf(false, true)) {
+                val change = MacroMerge.change("one", base, code(base, documentCode), code(base, libraryCode), pull)
+                assertEquals("conflict", change.kind)
+                assertEquals(listOf("value"), change.conflicts)
+                assertEquals(documentCode, change.result!!.string("value"))
+                assertTrue(change.chunks.any { it.document != null && it.library != null })
+            }
+        }
+    }
+
     @Test fun `another JVM holds the library lock and prevents writing`() = Fixture().use { f ->
         f.apply(f.preview("push", document(macro())))
         val snapshot = f.file.readBytes()

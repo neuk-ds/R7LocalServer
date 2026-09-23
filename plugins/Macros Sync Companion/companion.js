@@ -9,9 +9,11 @@
         if (!directoryPath) return;
         window.Asc.plugin.callCommand(function () { return Api.pluginMethod_GetMacros(); }, false, false, async function (raw) {
             try {
-                const document = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                const document = typeof raw === 'string' ? (raw.trim() === '' ? { macrosArray: [] } : JSON.parse(raw)) : raw;
                 if (!document || !Array.isArray(document.macrosArray)) throw new Error('Не удалось прочитать макросы документа');
-                const selectedGuids = document.macrosArray.filter(m => m.isUniversal && !m.isSeparator && !m.isExcludedFromAutoSync).map(m => m.guid);
+                const selectedGuids = document.macrosArray
+                    .filter(m => m && m.isUniversal && !m.isSeparator && !m.isExcludedFromAutoSync && typeof m.guid === 'string' && m.guid.trim())
+                    .map(m => m.guid);
                 if (!selectedGuids.length) return;
                 const response = await fetch(server.replace(/\/$/, '') + '/macros/v2/preview', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },

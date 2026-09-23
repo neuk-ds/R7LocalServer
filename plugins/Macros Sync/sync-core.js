@@ -23,8 +23,9 @@
     function read(plugin) {
         return call(plugin, function () {
             try {
-                const document = JSON.parse(Api.pluginMethod_GetMacros());
-                if (!Array.isArray(document.macrosArray)) throw new Error('Некорректный macrosArray');
+                const raw = Api.pluginMethod_GetMacros();
+                const document = typeof raw === 'string' ? (raw.trim() === '' ? { macrosArray: [] } : JSON.parse(raw)) : raw;
+                if (!document || !Array.isArray(document.macrosArray)) throw new Error('Некорректный macrosArray');
                 return JSON.stringify({ ok: true, document });
             } catch (error) { return JSON.stringify({ ok: false, error: String(error) }); }
         }).then(result => result.document);
@@ -42,11 +43,18 @@
                 copy.macrosArray.forEach(m => delete m._r7Sync);
                 return copy;
             }
+            // The command runs in the editor context, so it cannot call outer helpers.
+            function readDocument() {
+                const raw = Api.pluginMethod_GetMacros();
+                const document = typeof raw === 'string' ? (raw.trim() === '' ? { macrosArray: [] } : JSON.parse(raw)) : raw;
+                if (!document || !Array.isArray(document.macrosArray)) throw new Error('Некорректный macrosArray');
+                return document;
+            }
             try {
-                const current = JSON.parse(Api.pluginMethod_GetMacros());
+                const current = readDocument();
                 if (canonical(current) !== canonical(Asc.scope.r7Expected)) throw new Error('Документ изменился после просмотра. Обновите сравнение.');
                 Api.pluginMethod_SetMacros(JSON.stringify(Asc.scope.r7Next));
-                const actual = JSON.parse(Api.pluginMethod_GetMacros());
+                const actual = readDocument();
                 if (canonical(actual) === canonical(Asc.scope.r7Next)) return JSON.stringify({ ok: true, metadataLost: false });
                 const onlyMissingMetadata = actual.macrosArray.every(m => {
                     const expected = Asc.scope.r7Next.macrosArray.find(e => e.guid === m.guid);
