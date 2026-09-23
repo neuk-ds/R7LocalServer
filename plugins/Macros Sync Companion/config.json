@@ -18,7 +18,7 @@
       ],
       "isVisual": true,
       "isModal": false,
-      "isSystem": false,
+      "isSystem": true,
       "isViewer": false,
       "isInsideMode": true,
       "initDataType": "none",
