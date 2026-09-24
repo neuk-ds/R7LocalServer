@@ -103,11 +103,10 @@ jobs:
       - name: Package plugins
         run: |
           mkdir -p dist
-          for dir in plugins/*/; do
-            name="${dir#plugins/}"
-            name="${name%/}"
-            (cd "plugins/${name}" && zip -r "../../dist/${name}.zip" .)
-            mv "dist/${name}.zip" "dist/${name}.plugin"
+          for name in "Macros Sync" "Macros Sync Companion"; do
+            test -f "plugins/${name}/config.json"
+            (cd "plugins/${name}" && zip -r "../../dist/${name}.plugin" .)
+            zip -j "dist/${name}.plugin" LICENSE COPYRIGHT
           done
 
       - name: Upload plugin artifacts

@@ -1,11 +1,14 @@
 package ru.mrnds.r7localserver.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import ru.mrnds.r7localserver.settings.AppThemeMode
 import ru.mrnds.r7localserver.ui.widgets.ThemeModeDropdown
@@ -25,6 +28,7 @@ fun SettingsScreen(
     onStartMinimizedChange: (Boolean) -> Unit,
     onThemeModeChange: (AppThemeMode) -> Unit
 ) {
+    val uriHandler = LocalUriHandler.current
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -83,12 +87,40 @@ fun SettingsScreen(
                 onThemeModeChange = onThemeModeChange
             )
         }
-        Text(
-            text = "Версия: $appVersion",
-            color = MaterialTheme.colorScheme.secondary,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(end = 16.dp).align(Alignment.BottomEnd)
-        )
+        Row(
+            modifier = Modifier.padding(16.dp).align(Alignment.BottomEnd),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Разработчик: Дмитрий Неук",
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+            Text(
+                text = "neukds@yandex.ru",
+                modifier = Modifier.clickable { uriHandler.openUri("mailto:neukds@yandex.ru") },
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                textDecoration = TextDecoration.Underline,
+                maxLines = 1
+            )
+            Text(
+                text = "GitHub",
+                modifier = Modifier.clickable { uriHandler.openUri("https://github.com/neuk-ds/R7LocalServer") },
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                textDecoration = TextDecoration.Underline,
+                maxLines = 1
+            )
+            Text(
+                text = "Версия: $appVersion",
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
     }
 }
 

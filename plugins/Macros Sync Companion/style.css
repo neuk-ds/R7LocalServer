@@ -54,6 +54,8 @@ button:disabled { opacity: .55; cursor: default; }
 
 .kind { flex-shrink: 0; color: #666; font-size: 11px; }
 .hint { margin-top: 18px; color: #666; font-size: 12px; }
+.developer-footer { margin-top: 12px; color: #666; font-size: 11px; }
+.developer-footer a { color: inherit; }
 
 body.dark {
     background: #2b2b2b;
@@ -75,3 +77,4 @@ body.dark #status[data-state="changes"] { background: #49371b; color: #f4d28e; }
 body.dark #status[data-state="error"] { background: #4a2624; color: #f3aaa3; }
 body.dark #changes li { border-color: #444; }
 body.dark .kind, body.dark .hint { color: #b0b0b0; }
+body.dark .developer-footer { color: #b0b0b0; }

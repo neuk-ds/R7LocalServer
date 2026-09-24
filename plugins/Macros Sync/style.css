@@ -289,6 +289,9 @@ button.btn-small {
     flex-shrink: 0;
 }
 
+.developer-footer { flex-shrink: 0; margin-top: 4px; text-align: right; font-size: 11px; color: #666; }
+.developer-footer a { color: inherit; }
+
 /* ===== Модальное окно ===== */
 
 .overlay {
@@ -360,6 +363,8 @@ body.dark {
     background: #2b2b2b;
     color: #f2f2f2;
 }
+
+body.dark .developer-footer { color: #b0b0b0; }
 
 body.dark details {
     border-color: #444;
