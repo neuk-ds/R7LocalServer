@@ -16,6 +16,15 @@ class MacroConflict(message: String) : RuntimeException(message)
 data class LibraryRequest(val directoryPath: String, val fileName: String, val revisionId: String? = null)
 
 @Serializable
+data class OrderRequest(
+    val directoryPath: String,
+    val fileName: String,
+    val revisionId: String,
+    val expectedGuids: List<String>,
+    val orderedGuids: List<String>,
+)
+
+@Serializable
 data class PreviewRequest(
     val directoryPath: String,
     val fileName: String,

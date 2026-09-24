@@ -85,7 +85,22 @@ internal class MacroHistoryStore {
             if (File(history(file), ".managed").exists()) throw MacroConflict("Library metadata missing; restore library from a known history snapshot")
             return false
         }
-        return revision(file, id).library != root
+        return withoutOrdering(revision(file, id).library) != withoutOrdering(root)
+    }
+
+    private fun withoutOrdering(root: JsonObject): JsonObject {
+        val entries = (root["macrosArray"] as JsonArray).map { it.jsonObject }
+        val normalized = mutableListOf<JsonObject>()
+        val group = mutableListOf<JsonObject>()
+        fun flush() { normalized.addAll(group.sortedBy { it.guid() }); group.clear() }
+        for (macro in entries) {
+            if (macro.flag("isSeparator") || macro.guid() == SEPARATOR_ID) {
+                flush()
+                normalized.add(macro)
+            } else group.add(macro)
+        }
+        flush()
+        return root.withMacros(normalized)
     }
 
     fun <T> locked(file: File, action: () -> T): T {

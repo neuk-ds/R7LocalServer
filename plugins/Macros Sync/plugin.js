@@ -5,6 +5,10 @@
     const settings = { serverUrl: 'http://127.0.0.1:8124', dirPath: '', fileName: 'universal_macros.json', backupPath: '' };
     let doc = { macrosArray: [] }, library = { macrosArray: [] }, state, active, busy = false;
     let currentSelection = new Set(), savedSelection = new Set();
+    let savedOrderBase = [], orderLocation = null, orderServerUrl = null;
+    function libraryOrder() { return library.macrosArray.map(m => m.guid); }
+    function orderDirty() { return savedOrderBase.length === library.macrosArray.length &&
+        savedOrderBase.some((guid, index) => guid !== library.macrosArray[index].guid); }
     function log(message) { $('log').textContent = '[' + new Date().toLocaleTimeString() + '] ' + message + '\n' + $('log').textContent; }
     function node(tag, text, className) {
         const element = document.createElement(tag);
@@ -25,8 +29,8 @@
         finally { busy = false; document.body.classList.remove('busy'); }
     }
     function paths() { return { directoryPath: $('dirPath').value.trim(), fileName: $('fileName').value.trim() }; }
-    async function api(path, body) {
-        const url = $('serverUrl').value.trim().replace(/\/$/, '') + path;
+    async function api(path, body, serverUrl = $('serverUrl').value.trim()) {
+        const url = serverUrl.replace(/\/$/, '') + path;
         let response;
         try {
             response = await fetch(url, {
@@ -41,11 +45,11 @@
         if (!response.ok) throw new Error(result.message || 'Ошибка сервера: ' + response.status);
         return result;
     }
-    const { isSeparator, realMacros, groups, orderedMacros, selectionBox, render, bookPositions, animateBookMove } =
+    const { isSeparator, realMacros, groups, orderedMacros, selectionBox, render, bookPositions, savedPositions, animateBookMove, animateSavedMove } =
         window.R7SyncLists({
             core, $, node, button, run,
-            getData: () => ({ doc, library, state, currentSelection, savedSelection }),
-            setUniversal, setExcluded, moveMacro
+            getData: () => ({ doc, library, state, currentSelection, savedSelection, orderDirty: orderDirty() }),
+            setUniversal, setExcluded, moveMacro, moveSavedMacro
         });
     const { drawReview } = window.R7SyncReviewUI({ $, node, button, selectionBox, getActive: () => active });
     async function setUniversal(guid, enabled) {
@@ -84,6 +88,31 @@
         await core.apply(Asc.plugin, Asc.scope, latest, next);
         await updateBook(true);
     }
+    function moveSavedMacro(guid, direction) {
+        if (!state?.managed || state.externalChanges || !library._r7Library?.revisionId)
+            throw new Error('Сначала включите историю библиотеки и зарегистрируйте внешние изменения.');
+        const macros = library.macrosArray.slice();
+        const index = macros.findIndex(m => m.guid === guid && !isSeparator(m));
+        const destination = index + direction;
+        if (index < 0 || destination < 0 || destination >= macros.length || isSeparator(macros[destination])) return;
+        [macros[index], macros[destination]] = [macros[destination], macros[index]];
+        const before = savedPositions();
+        library = Object.assign({}, library, { macrosArray: macros });
+        render();
+        animateSavedMove(before);
+    }
+    async function saveOrder() {
+        if (!orderDirty()) return;
+        const updated = await api('/macros/v2/order', Object.assign({}, orderLocation, {
+            revisionId: library._r7Library.revisionId,
+            expectedGuids: savedOrderBase,
+            orderedGuids: libraryOrder()
+        }), orderServerUrl);
+        state = updated; library = updated.library;
+        savedOrderBase = libraryOrder();
+        render();
+        log('Порядок макросов библиотеки сохранён.');
+    }
     async function updateBook(animateMove = false) {
         doc = await core.read(Asc.plugin);
         const before = animateMove ? bookPositions() : null;
@@ -91,13 +120,16 @@
         animateBookMove(before);
     }
     async function refresh() {
+        await saveOrder();
         doc = await core.read(Asc.plugin);
         state = undefined; library = { macrosArray: [] };
         render();
         state = await api('/macros/v2/state', paths()); library = state.library;
+        savedOrderBase = libraryOrder(); orderLocation = paths(); orderServerUrl = $('serverUrl').value.trim();
         render();
     }
     async function preview(action, revisionId, replacementDocument) {
+        await saveOrder();
         doc = await core.read(Asc.plugin);
         const selectedGuids = action === 'push' ? [...currentSelection].filter(id => realMacros(doc).some(m => m.guid === id && m.isUniversal)) : [...savedSelection];
         if (['push', 'pull', 'delete'].includes(action) && !selectedGuids.length) throw new Error('Выберите макросы; для публикации — универсальные.');
@@ -166,6 +198,7 @@
             localStorage.setItem('macrosSync_autoSync', String($('autoSync').checked)); log('Настройки сохранены');
         });
         bind('btnRefresh', refresh);
+        bind('btnSaveOrder', saveOrder);
         bind('btnSelectCurrent', () => { currentSelection = new Set(realMacros(doc).filter(m => m.isUniversal).map(m => m.guid)); render(); });
         bind('btnSelectAll', () => { savedSelection = new Set(realMacros(library).map(m => m.guid)); render(); });
         bind('btnPush', () => preview('push')); bind('btnLoadSelected', () => preview('pull'));
@@ -177,5 +210,7 @@
         bind('btnCloseHistory', () => $('historyOverlay').classList.add('hidden'));
         run(refresh);
     };
-    window.Asc.plugin.button = function () { if (!busy) this.executeCommand('close', ''); };
+    window.Asc.plugin.button = function () {
+        if (!busy) return run(async () => { await saveOrder(); window.Asc.plugin.executeCommand('close', ''); });
+    };
 })(window);

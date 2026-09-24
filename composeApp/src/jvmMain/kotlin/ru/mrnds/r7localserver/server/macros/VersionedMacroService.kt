@@ -22,6 +22,36 @@ class VersionedMacroService {
         return LibraryState(root, store.meta(root) != null, store.external(file, root))
     }
 
+    fun saveOrder(request: OrderRequest): LibraryState {
+        val file = store.file(request.directoryPath, request.fileName)
+        return store.locked(file) {
+            val root = store.read(file)
+            val revision = store.meta(root)?.string("revisionId")
+                ?: throw MacroConflict("Initialize version history before reordering macros")
+            if (store.external(file, root)) throw MacroConflict("External changes detected: review and register them first")
+            if (revision != request.revisionId) throw MacroConflict("Library changed since it was opened; refresh and retry")
+            val macros = (root["macrosArray"] as JsonArray).map { it.jsonObject }
+            val currentGuids = macros.map { it.guid() }
+            if (currentGuids == request.orderedGuids) return@locked LibraryState(root, true, false)
+            if (currentGuids != request.expectedGuids) throw MacroConflict("Library order changed; refresh and retry")
+            require(request.orderedGuids.size == currentGuids.size && request.orderedGuids.toSet().size == currentGuids.size &&
+                request.orderedGuids.toSet() == currentGuids.toSet()) { "Order must contain every library macro exactly once" }
+            val separators = macros.indices.filter { macros[it].flag("isSeparator") || macros[it].guid() == SEPARATOR_ID }
+            var start = 0
+            for (end in separators + macros.size) {
+                require(request.orderedGuids.subList(start, end).toSet() == currentGuids.subList(start, end).toSet()) {
+                    "Macros cannot cross a separator"
+                }
+                if (end < macros.size) require(request.orderedGuids[end] == currentGuids[end]) { "Separator cannot move" }
+                start = end + 1
+            }
+            val byGuid = macros.associateBy { it.guid() }
+            val next = root.withMacros(request.orderedGuids.map { byGuid.getValue(it) })
+            store.atomicWrite(file, macroJson.encodeToString(next))
+            LibraryState(next, true, false)
+        }
+    }
+
     fun history(request: LibraryRequest): List<MacroRevision> = store.revisions(store.file(request.directoryPath, request.fileName))
     fun revision(request: LibraryRequest): MacroRevision = history(request).firstOrNull { it.id == request.revisionId }
         ?: throw MacroConflict("Revision is not in the published history")

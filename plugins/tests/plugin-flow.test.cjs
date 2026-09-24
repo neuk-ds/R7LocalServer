@@ -20,16 +20,17 @@ class Element {
 }
 function all(root) { return [root, ...root.children.flatMap(all)]; }
 function bookRow(ui, name) { return ui.elements.listCurrent.children.find(row => row.children[1]?.textContent === name); }
+function savedRow(ui, name) { return ui.elements.listSaved.children.find(row => row.children[1]?.textContent === name); }
 function universalBox(row) { return row.children.find(child => child.className === 'universal-label').children[0]; }
 function ids(ui) { return ui.current.macrosArray.map(m => m.guid); }
 const macro = value => ({ guid: 'one', name: 'One', value, isUniversal: true });
 const documentOf = value => ({ macrosArray: [macro(value)], current: 0 });
-async function harness(action = 'push', conflict = false, emptyBook = false, serverUnavailable = false, withSeparator = false) {
+async function harness(action = 'push', conflict = false, emptyBook = false, serverUnavailable = false, withSeparator = false, reviewData = {}) {
     const pluginDirectory = path.join(__dirname, '../Macros Sync');
     const html = fs.readFileSync(path.join(pluginDirectory, 'index.html'), 'utf8');
     const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
     const body = new Element('body');
-    let current = emptyBook ? null : documentOf('document'), writes = 0;
+    let current = emptyBook ? null : documentOf('document'), writes = 0, closes = 0, rejectOrder = false;
     if (withSeparator) current.macrosArray.push(
         { guid: '00000000-separator-0000-000000000000', name: ' ', value: '', isSeparator: true },
         { guid: 'personal', name: 'Personal', value: 'local', isUniversal: false }
@@ -42,8 +43,11 @@ async function harness(action = 'push', conflict = false, emptyBook = false, ser
     const source = { macrosArray: [macro('library')], _r7Library: { revisionId: 'revision', libraryId: 'library' } };
     const result = macro('merged');
     let context;
-    const plugin = { callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); } };
-    const window = { Asc: { plugin, scope: {} } };
+    const plugin = {
+        callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); },
+        executeCommand(command) { assert.equal(command, 'close'); closes++; }
+    };
+    const window = { Asc: { plugin, scope: {} }, getComputedStyle: () => ({ lineHeight: '18px' }) };
     context = vm.createContext({
         window, Asc: window.Asc, document, console, setTimeout, clearTimeout,
         localStorage: { getItem: key => settings.get(key), setItem: (key, value) => settings.set(key, value) },
@@ -53,10 +57,18 @@ async function harness(action = 'push', conflict = false, emptyBook = false, ser
             const request = JSON.parse(options.body); calls.push({ url, request });
             let data;
             if (url.endsWith('/state')) data = { library: source, managed: true, externalChanges: false };
+            else if (url.endsWith('/order')) {
+                if (rejectOrder) return { ok: false, status: 409, json: async () => ({ message: 'Library order changed' }) };
+                assert.equal(request.revisionId, source._r7Library.revisionId);
+                assert.deepEqual(request.expectedGuids, source.macrosArray.map(m => m.guid));
+                const byGuid = new Map(source.macrosArray.map(m => [m.guid, m]));
+                source.macrosArray = request.orderedGuids.map(guid => byGuid.get(guid));
+                data = { library: source, managed: true, externalChanges: false };
+            }
             else if (url.endsWith('/preview')) data = { token: 'token', operationId: 'operation', changes: [{
                 guid: 'one', name: 'One', kind: conflict ? 'conflict' : emptyBook ? 'added' : 'modified', base: null,
-                document: emptyBook ? null : macro('document'), library: macro('library'), result,
-                conflicts: conflict ? ['base'] : [], chunks: [], diff: [{ kind: 'added', text: 'merged', oldLine: null, newLine: 1 }]
+                document: emptyBook ? null : macro('document'), library: macro('library'), result: reviewData.result || result,
+                conflicts: conflict ? ['base'] : [], chunks: [], diff: reviewData.diff || [{ kind: 'added', text: 'merged', oldLine: null, newLine: 1 }]
             }] };
             else if (url.endsWith('/apply')) data = action === 'push' ? { revisionId: 'saved', changed: true } : {
                 document: documentOf('merged'), expectedDocument: expected, backupPath: 'backups/one.json', changed: true
@@ -71,7 +83,8 @@ async function harness(action = 'push', conflict = false, emptyBook = false, ser
     plugin.init();
     for (let i = 0; i < 20 && body.classList.contains('busy'); i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(body.classList.contains('busy'), false);
-    return { elements, calls, get writes() { return writes; }, get current() { return current; }, set current(value) { current = value; },
+    return { elements, calls, source, plugin, get writes() { return writes; }, get closes() { return closes; },
+        set rejectOrder(value) { rejectOrder = value; }, get current() { return current; }, set current(value) { current = value; },
         async open() { await elements[action === 'push' ? 'btnSelectCurrent' : 'btnSelectAll'].click(); await elements[action === 'push' ? 'btnPush' : 'btnLoadSelected'].click(); } };
 }
 test('opening and cancelling review does not write the document or library', async () => {
@@ -80,6 +93,35 @@ test('opening and cancelling review does not write the document or library', asy
     await ui.elements.btnCancelReview.click();
     assert.equal(ui.writes, 0);
     assert.equal(ui.calls.filter(c => c.url.endsWith('/apply')).length, 0);
+});
+test('review places diff beside result and synchronizes matching lines across deletions', async () => {
+    const diffLines = [];
+    for (let line = 1; line <= 30; line++) {
+        if (line === 11) diffLines.push({ kind: 'removed', text: 'deleted', oldLine: 11, newLine: null });
+        diffLines.push({ kind: 'same', text: 'line ' + line, oldLine: line + (line > 10 ? 1 : 0), newLine: line });
+    }
+    const result = macro(Array.from({ length: 30 }, (_, index) => 'line ' + (index + 1)).join('\n'));
+    const ui = await harness('pull', false, false, false, false, { diff: diffLines, result });
+    await ui.open();
+    const columns = all(ui.elements.reviewChanges).find(element => element.className === 'review-code-columns');
+    assert.equal(columns.children.length, 2);
+    const diff = columns.children[0].children[1];
+    const editor = columns.children[1].children[1];
+    assert.equal(diff.className, 'diff');
+    assert.equal(editor.className, 'result-code');
+    assert.equal(editor.wrap, 'off');
+    editor.scrollTop = 10 * 18;
+    editor.listeners.scroll[0]();
+    assert.equal(diff.scrollTop, 11 * 18);
+    diff.listeners.scroll[0](); // Scroll event caused by synchronization.
+    diff.scrollTop = 20 * 18;
+    diff.listeners.scroll[0]();
+    assert.equal(editor.scrollTop, 19 * 18);
+    editor.value += '\nextra\nextra\nextra\nextra';
+    editor.listeners.input[0]();
+    editor.scrollTop = 20 * 18;
+    editor.listeners.scroll[0]();
+    assert.equal(diff.scrollTop, Math.round(20 * 30 / 33) * 18);
 });
 test('main plugin shows direct differences against the library', async () => {
     const ui = await harness('pull');
@@ -138,6 +180,41 @@ test('move buttons change book order only within the same group', async () => {
     await bookRow(ui, 'Two').children.at(-1).children[0].click();
     assert.deepEqual(ids(ui), ['two', 'one', '00000000-separator-0000-000000000000', 'other', 'personal']);
     assert.equal(ui.writes, 2);
+});
+test('saved macro arrows keep a draft until Save order is clicked', async () => {
+    const ui = await harness();
+    ui.source.macrosArray.push({ guid: 'two', name: 'Two', value: 'code', isUniversal: true });
+    await ui.elements.btnRefresh.click();
+    assert.equal(savedRow(ui, 'One').children.at(-1).children[0].disabled, true);
+    assert.equal(savedRow(ui, 'Two').children.at(-1).children[1].disabled, true);
+    ui.elements.listSaved.scrollTop = 32;
+    await savedRow(ui, 'Two').children.at(-1).children[0].click();
+    assert.deepEqual(ui.source.macrosArray.map(m => m.guid), ['one', 'two']);
+    assert.deepEqual(ui.elements.listSaved.children.map(row => row.children[1].textContent), ['Two', 'One']);
+    assert.equal(ui.elements.listSaved.scrollTop, 32);
+    assert.equal(ui.calls.filter(c => c.url.endsWith('/order')).length, 0);
+    assert.equal(ui.elements.btnSaveOrder.disabled, false);
+    await ui.elements.btnSaveOrder.click();
+    assert.deepEqual(ui.source.macrosArray.map(m => m.guid), ['two', 'one']);
+    assert.equal(ui.source._r7Library.revisionId, 'revision');
+    assert.equal(ui.elements.btnSaveOrder.disabled, true);
+    assert.equal(ui.calls.filter(c => c.url.endsWith('/order')).length, 1);
+    assert.equal(ui.writes, 0);
+});
+test('closing saves a pending library order and leaves the window open if saving fails', async () => {
+    const ui = await harness();
+    ui.source.macrosArray.push({ guid: 'two', name: 'Two', value: 'code', isUniversal: true });
+    await ui.elements.btnRefresh.click();
+    await savedRow(ui, 'Two').children.at(-1).children[0].click();
+    ui.rejectOrder = true;
+    await ui.plugin.button(-1);
+    assert.equal(ui.closes, 0);
+    assert.equal(ui.elements.btnSaveOrder.disabled, false);
+    assert.match(ui.elements.log.textContent, /Library order changed/);
+    ui.rejectOrder = false;
+    await ui.plugin.button(-1);
+    assert.equal(ui.closes, 1);
+    assert.deepEqual(ui.source.macrosArray.map(m => m.guid), ['two', 'one']);
 });
 test('publishing from review calls v2 apply and never writes the document', async () => {
     const ui = await harness(); await ui.open(); await ui.elements.btnApply.click();

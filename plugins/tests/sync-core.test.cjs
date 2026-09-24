@@ -110,7 +110,7 @@ test('invalid read fails instead of treating document as empty', async () => {
     const e = editor({ broken: true });
     await assert.rejects(core.read(e.plugin), /macrosArray/);
 });
-function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync_dirPath: 'shared' }, response = { library: { macrosArray: [] } }) {
+function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync_dirPath: 'shared' }, response = { library: { macrosArray: [] } }, mode = 'background', bridge = {}) {
     class Element {
         constructor() { this.textContent = ''; this.dataset = {}; this.disabled = false; this.children = []; this.listeners = {}; }
         replaceChildren(...children) { this.children = children; }
@@ -120,27 +120,58 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     }
     const elements = Object.fromEntries(['status', 'changes', 'refresh'].map(id => [id, new Element()]));
     const body = { classList: { add() {} } };
-    let raw = initial, writes = 0, closes = 0;
-    const requests = [];
-    let context;
+    const requests = [], windows = [], messages = [];
+    let raw = initial, serverResponse = response, writes = 0, closes = 0, bodyReady = false, context;
     const plugin = {
-        callCommand(fn, a, b, callback) { callback(vm.runInContext('(' + fn.toString() + ')()', context)); },
-        executeCommand(command) { assert.equal(command, 'close'); closes++; }
+        callCommand(fn, a, b, callback) {
+            if (mode === 'window') throw new Error('callCommand is forbidden in a window frame');
+            callback(vm.runInContext('(' + fn.toString() + ')()', context));
+        },
+        executeCommand() { throw new Error('executeCommand is forbidden in a window frame'); },
+        executeMethod() { throw new Error('executeMethod is forbidden in a window frame'); },
+        sendToPlugin(name, data) {
+            assert.equal(mode, 'window');
+            messages.push({ name, data: JSON.parse(JSON.stringify(data)) });
+            bridge.pending = bridge.background.emit(name, data);
+            return true;
+        }
     };
-    const window = { Asc: { plugin } };
+    const window = {
+        location: { href: 'file:///plugins/Macros%20Sync%20Companion/companion.html' },
+        Asc: { plugin, PluginWindow: class {
+            constructor() { this.events = {}; this.id = 'test-window'; }
+            attachEvent(name, callback) { this.events[name] = callback; }
+            show(variation) { windows.push({ variation, handle: this }); }
+            command(name, data) { bridge.child.plugin['event_' + name](data); }
+            close() { closes++; }
+        } }
+    };
     context = vm.createContext({
         window, Asc: window.Asc,
-        document: { body, getElementById: id => elements[id], createElement: () => new Element() },
+        document: { body, getElementById: id => bodyReady && mode === 'window' ? elements[id] : null, createElement: () => new Element() },
         localStorage: { getItem: key => settings[key] }, console: { warn() {} }, setTimeout, clearTimeout,
         Api: { pluginMethod_GetMacros: () => raw, pluginMethod_SetMacros: () => { writes++; } },
-        fetch: async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return { ok: true, json: async () => response }; }
+        fetch: async (url, options) => {
+            if (mode === 'window') throw new Error('fetch is forbidden in a window frame');
+            requests.push({ url, body: JSON.parse(options.body) });
+            return { ok: true, json: async () => serverResponse };
+        }
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Macros Sync Companion/companion.js'), 'utf8'), context);
-    plugin.init();
-    return { elements, requests, settings, set raw(value) { raw = value; }, get writes() { return writes; }, get closes() { return closes; },
-        async settle() { for (let i = 0; i < 10 && elements.refresh.disabled; i++) await new Promise(resolve => setImmediate(resolve)); } };
+    bodyReady = true;
+    const instance = {
+        plugin, elements, requests, windows, messages, settings,
+        emit(name, data) { return windows[0].handle.events[name](data); },
+        set raw(value) { raw = value; }, set response(value) { serverResponse = value; },
+        get writes() { return writes; }, get closes() { return closes; }
+    };
+    bridge[mode === 'window' ? 'child' : 'background'] = instance;
+    const initialCheck = plugin.init();
+    instance.settle = () => initialCheck;
+    return instance;
 }
-test('Companion compares book code directly with library, even when only the book changed', async () => {
+
+test('background Companion compares book code directly with library and opens one window', async () => {
     const ui = companion(JSON.stringify({ macrosArray: [
         { guid: 'one', name: 'One', value: 'book', isUniversal: true, _r7Sync: { base: { value: 'library' } } },
         { guid: 'excluded', name: 'Excluded', value: 'book', isUniversal: true, isExcludedFromAutoSync: true }
@@ -152,38 +183,105 @@ test('Companion compares book code directly with library, even when only the boo
     assert.equal(ui.requests.length, 1);
     assert.match(ui.requests[0].url, /\/macros\/v2\/state$/);
     assert.deepEqual(ui.requests[0].body, { directoryPath: 'shared', fileName: 'universal_macros.json' });
-    assert.equal(ui.elements.status.textContent, 'Найдены отличия: 1');
-    assert.equal(ui.elements.changes.children[0].children[0].textContent, 'One');
-    assert.equal(ui.elements.changes.children[0].children[1].textContent, 'Отличается от библиотеки');
-    assert.equal(ui.closes, 0);
+    assert.equal(ui.windows.length, 1);
+    assert.equal(ui.windows[0].variation.isInsideMode, false);
+    assert.match(ui.windows[0].variation.url, /companion-window\.html$/);
     assert.equal(ui.writes, 0);
 });
-test('Companion ignores local flags and property order when contents match', async () => {
-    const ui = companion(JSON.stringify({ macrosArray: [{ value: 'same', guid: 'one', name: 'One', isUniversal: true, _r7Sync: {} }] }),
+
+test('background Companion opens no window for disabled, equal, or missing-document-only changes', async () => {
+    const disabled = companion(undefined, { macrosSync_autoSync: 'false', macrosSync_dirPath: 'shared' });
+    await disabled.settle();
+    assert.equal(disabled.windows.length, 0);
+    assert.equal(disabled.requests.length, 0);
+
+    const equal = companion(JSON.stringify({ macrosArray: [{ value: 'same', guid: 'one', name: 'One', isUniversal: true, _r7Sync: {} }] }),
         undefined, { library: { macrosArray: [{ name: 'One', guid: 'one', value: 'same' }] } });
-    await ui.settle();
-    assert.equal(ui.closes, 1);
-    assert.equal(ui.elements.changes.children.length, 0);
+    await equal.settle();
+    assert.equal(equal.windows.length, 0);
+
+    const missing = companion(undefined, undefined, { library: { macrosArray: [{ guid: 'saved', name: 'Saved' }] } });
+    await missing.settle();
+    assert.equal(missing.windows.length, 0);
 });
-test('Companion shows library macros missing from a new book and local universal macros', async () => {
-    const ui = companion(undefined, undefined, { library: { macrosArray: [{ guid: 'saved', name: 'Saved', value: 'code' }] } });
-    await ui.settle();
-    assert.equal(ui.elements.changes.children[0].children[1].textContent, 'Нет в книге');
-    ui.raw = JSON.stringify({ macrosArray: [{ guid: 'local', name: 'Local', value: 'code', isUniversal: true }] });
-    await ui.elements.refresh.click();
-    assert.equal(ui.elements.status.textContent, 'Найдены отличия: 2');
-    assert.equal(ui.elements.changes.children[1].children[1].textContent, 'Нет в библиотеке');
+
+test('window receives the background result without accessing the editor or server', async () => {
+    const bridge = {};
+    const background = companion(JSON.stringify({ macrosArray: [
+        { guid: 'one', name: 'One', value: 'book', isUniversal: true },
+        { guid: 'local', name: 'Local', value: 'local', isUniversal: true }
+    ] }), undefined, { library: { macrosArray: [
+        { guid: 'one', name: 'One', value: 'library' },
+        { guid: 'saved', name: 'Saved', value: 'code' }
+    ] } }, 'background', bridge);
+    await background.settle();
+    const child = companion(undefined, undefined, undefined, 'window', bridge);
+    await child.settle();
+    assert.deepEqual(child.messages, [{ name: 'companionReady', data: {} }]);
+    assert.equal(child.requests.length, 0);
+    assert.equal(child.elements.status.textContent, 'Найдены отличия: 3');
+    assert.equal(child.elements.changes.children[0].children[1].textContent, 'Отличается от библиотеки');
+    assert.equal(child.elements.changes.children[1].children[1].textContent, 'Нет в книге');
+    assert.equal(child.elements.changes.children[2].children[1].textContent, 'Нет в библиотеке');
+    assert.equal(child.writes, 0);
 });
-test('Companion closes without reading the book when checking is disabled', async () => {
-    const ui = companion(undefined, { macrosSync_autoSync: 'false', macrosSync_dirPath: 'shared' });
-    await ui.settle();
-    assert.equal(ui.closes, 1);
-    assert.equal(ui.requests.length, 0);
+
+test('refresh uses the background checker and closes its window when only missing book macros remain', async () => {
+    const bridge = {};
+    const background = companion(JSON.stringify({ macrosArray: [{ guid: 'one', name: 'One', value: 'book', isUniversal: true }] }),
+        undefined, { library: { macrosArray: [{ guid: 'one', name: 'One', value: 'library' }] } }, 'background', bridge);
+    await background.settle();
+    const child = companion(undefined, undefined, undefined, 'window', bridge);
+    await child.settle();
+    background.raw = JSON.stringify({ macrosArray: [] });
+    await child.elements.refresh.click();
+    await bridge.pending;
+    assert.equal(background.closes, 1);
+    assert.equal(child.requests.length, 0);
+    assert.equal(background.requests.length, 2);
+    assert.deepEqual(child.messages.map(message => message.name), ['companionReady', 'companionRefresh']);
 });
-test('Companion panel shows server errors', async () => {
-    const ui = companion(undefined, undefined, { broken: true });
-    await ui.settle();
-    assert.match(ui.elements.status.textContent, /некорректную библиотеку/);
-    assert.equal(ui.elements.status.dataset.state, 'error');
-    assert.equal(ui.closes, 0);
+
+test('refresh updates the open window and keeps server errors visible', async () => {
+    const bridge = {};
+    const background = companion(JSON.stringify({ macrosArray: [{ guid: 'one', name: 'One', value: 'book', isUniversal: true }] }),
+        undefined, { library: { macrosArray: [{ guid: 'one', name: 'One', value: 'library' }] } }, 'background', bridge);
+    await background.settle();
+    const child = companion(undefined, undefined, undefined, 'window', bridge);
+    await child.settle();
+    background.response = { broken: true };
+    await child.elements.refresh.click();
+    await bridge.pending;
+    assert.match(child.elements.status.textContent, /некорректную библиотеку/);
+    assert.equal(child.elements.status.dataset.state, 'error');
+    assert.equal(child.elements.refresh.disabled, false);
+    assert.equal(background.windows.length, 1);
+    assert.equal(background.closes, 0);
+});
+
+test('background Companion opens a window for a startup error', async () => {
+    const bridge = {};
+    const background = companion(undefined, undefined, { broken: true }, 'background', bridge);
+    await background.settle();
+    assert.equal(background.windows.length, 1);
+    const child = companion(undefined, undefined, undefined, 'window', bridge);
+    await child.settle();
+    assert.match(child.elements.status.textContent, /некорректную библиотеку/);
+    assert.equal(child.elements.status.dataset.state, 'error');
+    assert.equal(child.requests.length, 0);
+});
+
+test('close button closes only the active Companion window', async () => {
+    const background = companion(JSON.stringify({ macrosArray: [{ guid: 'local', isUniversal: true }] }));
+    await background.settle();
+    assert.equal(background.windows.length, 1);
+
+    background.plugin.button(-1, 'another-window');
+    background.plugin.button(0, 'test-window');
+    assert.equal(background.closes, 0);
+
+    background.plugin.button(-1, 'test-window');
+    assert.equal(background.closes, 1);
+    background.plugin.button(-1, 'test-window');
+    assert.equal(background.closes, 1);
 });

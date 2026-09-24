@@ -16,7 +16,7 @@
         "icon.svg",
         "icon.svg"
       ],
-      "isVisual": true,
+      "isVisual": false,
       "isModal": false,
       "isSystem": true,
       "isViewer": false,

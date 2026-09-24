@@ -242,6 +242,45 @@ class VersionedMacroTest {
         assertEquals(2, f.service.state(f.location).library.macros().size)
     }
 
+    @Test fun `saving library order does not create a revision or change macro contents`() = Fixture().use { f ->
+        val original = document(macro(id = "one"), macro(id = "two"), macro(id = "three"))
+        f.apply(f.preview("push", original, listOf("one", "two", "three")))
+        val before = f.service.state(f.location).library
+        val revision = before[LIBRARY_META]!!.jsonObject.string("revisionId")
+        val previous = before.macros().map { it.guid() }
+        val ordered = listOf("two", "one", "three")
+        val request = OrderRequest(f.directory.path, f.file.name, revision, previous, ordered)
+        val result = f.service.saveOrder(request)
+        assertFalse(result.externalChanges)
+        assertEquals(result.library, f.service.saveOrder(request).library)
+        val after = result.library
+        assertEquals(listOf("two", "one", "three"), after.macros().map { it.guid() })
+        assertEquals(before.macros().associateBy { it.guid() }, after.macros().associateBy { it.guid() })
+        assertEquals(revision, after[LIBRARY_META]!!.jsonObject.string("revisionId"))
+        assertEquals(1, f.service.history(f.location).size)
+        assertFailsWith<MacroConflict> { f.service.saveOrder(OrderRequest(f.directory.path, f.file.name, revision, previous, listOf("three", "one", "two"))) }
+        assertEquals(listOf("two", "one", "three"), f.service.state(f.location).library.macros().map { it.guid() })
+        val next = f.apply(f.preview("push", original, listOf("one")))
+        assertFalse(next.changed)
+        assertFalse(f.service.state(f.location).externalChanges)
+    }
+
+    @Test fun `order cannot cross a separator or change an unregistered library`() = Fixture().use { f ->
+        val separator = buildJsonObject { put("guid", SEPARATOR_ID); put("name", " "); put("value", ""); put("isSeparator", true) }
+        val root = document(macro(id = "one"), separator, macro(id = "two"))
+        f.file.writeText(root.toString())
+        val unmanaged = OrderRequest(f.directory.path, f.file.name, "", listOf("one", SEPARATOR_ID, "two"), listOf("two", SEPARATOR_ID, "one"))
+        assertFailsWith<MacroConflict> { f.service.saveOrder(unmanaged) }
+        f.apply(f.preview("import"))
+        val revision = f.service.state(f.location).library[LIBRARY_META]!!.jsonObject.string("revisionId")
+        assertFailsWith<IllegalArgumentException> { f.service.saveOrder(unmanaged.copy(revisionId = revision)) }
+        assertEquals(root["macrosArray"], f.service.state(f.location).library["macrosArray"])
+        assertFailsWith<IllegalArgumentException> { f.service.saveOrder(unmanaged.copy(revisionId = revision, orderedGuids = listOf("one", "one", "two"))) }
+        f.file.writeText(f.service.state(f.location).library.withMacros(listOf(macro(id = "external"))).toString())
+        assertFailsWith<MacroConflict> { f.service.saveOrder(unmanaged.copy(revisionId = revision)) }
+        Unit
+    }
+
     @Test fun `document restore retains exact backup and backs up current document`() = Fixture().use { f ->
         f.file.writeText("broken library must not block document recovery")
         val current = document(macro("current")); val backup = document(macro("backup", "other"))

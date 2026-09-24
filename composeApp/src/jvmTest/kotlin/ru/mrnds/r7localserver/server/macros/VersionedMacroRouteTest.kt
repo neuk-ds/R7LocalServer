@@ -48,6 +48,13 @@ class VersionedMacroRouteTest {
                 setBody(macroJson.encodeToString(ApplyRequest(directory.path, "library.json", preview.token, preview.operationId, listOf("one"))))
             }
             assertEquals(HttpStatusCode.OK, applied.status)
+            val saved = macroJson.decodeFromString<ApplyResponse>(applied.bodyAsText())
+            val reorder = client.post("/macros/v2/order") {
+                contentType(ContentType.Application.Json)
+                setBody(macroJson.encodeToString(OrderRequest(directory.path, "library.json", saved.revisionId!!, listOf("one"), listOf("one"))))
+            }
+            assertEquals(HttpStatusCode.OK, reorder.status)
+            assertFalse(macroJson.decodeFromString<LibraryState>(reorder.bodyAsText()).externalChanges)
             val history = client.post("/macros/v2/history") { contentType(ContentType.Application.Json); setBody(macroJson.encodeToString(location)) }
             assertEquals(1, macroJson.decodeFromString<List<MacroRevision>>(history.bodyAsText()).size)
             val legacy = client.post("/macros/sync") {
