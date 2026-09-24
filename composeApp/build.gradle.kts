@@ -107,6 +107,8 @@ val packageMacrosSyncPlugin by tasks.registering(Zip::class) {
     group = "distribution"
     description = "Package the versioned Macros Sync plugin for R7 Office"
     from(rootProject.file("plugins/Macros Sync"))
+    from(rootProject.file("LICENSE"))
+    from(rootProject.file("COPYRIGHT"))
     archiveFileName.set("Macros Sync.plugin")
     destinationDirectory.set(layout.buildDirectory.dir("distributions/plugins"))
 }
@@ -115,6 +117,8 @@ val packageMacrosSyncCompanionPlugin by tasks.registering(Zip::class) {
     group = "distribution"
     description = "Package the read-only Macros Sync Companion plugin"
     from(rootProject.file("plugins/Macros Sync Companion"))
+    from(rootProject.file("LICENSE"))
+    from(rootProject.file("COPYRIGHT"))
     archiveFileName.set("Macros Sync Companion.plugin")
     destinationDirectory.set(layout.buildDirectory.dir("distributions/plugins"))
 }
