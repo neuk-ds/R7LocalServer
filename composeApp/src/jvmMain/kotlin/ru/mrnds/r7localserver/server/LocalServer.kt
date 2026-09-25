@@ -11,13 +11,11 @@ import io.ktor.server.routing.*
 import org.slf4j.LoggerFactory
 import ru.mrnds.r7localserver.files.FileService
 import ru.mrnds.r7localserver.files.exporter.ExcelSheetExporter
-import ru.mrnds.r7localserver.server.macros.MacroSyncService
 import ru.mrnds.r7localserver.server.macros.VersionedMacroService
 import ru.mrnds.r7localserver.server.routing.versionedMacroRoute
 import ru.mrnds.r7localserver.server.proxy.ProxyService
 import ru.mrnds.r7localserver.server.routing.excelExportRoute
 import ru.mrnds.r7localserver.server.routing.fileRoute
-import ru.mrnds.r7localserver.server.routing.macroSyncRoute
 import ru.mrnds.r7localserver.server.routing.pingRoutes
 import ru.mrnds.r7localserver.server.routing.proxyRoute
 
@@ -29,7 +27,6 @@ class LocalServer(
     private val fileService = FileService()
     private val proxyService = ProxyService()
     private val excelSheetExporter = ExcelSheetExporter()
-    private val macroSyncService = MacroSyncService()
     private val versionedMacroService = VersionedMacroService()
 
     fun start() {
@@ -74,9 +71,6 @@ class LocalServer(
                 )
                 proxyRoute(
                     proxyService = proxyService
-                )
-                macroSyncRoute(
-                    macroSyncService = macroSyncService
                 )
             }
         }

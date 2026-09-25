@@ -16,12 +16,11 @@ import java.nio.file.Files
 import kotlin.test.*
 
 class VersionedMacroRouteTest {
-    @Test fun `v2 HTTP contract and legacy protections`() = testApplication {
+    @Test fun `v2 HTTP contract and removed legacy route`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
             routing {
                 versionedMacroRoute(VersionedMacroService())
-                macroSyncRoute(MacroSyncService())
                 fileRoute(FileService())
             }
         }
@@ -57,11 +56,7 @@ class VersionedMacroRouteTest {
             assertFalse(macroJson.decodeFromString<LibraryState>(reorder.bodyAsText()).externalChanges)
             val history = client.post("/macros/v2/history") { contentType(ContentType.Application.Json); setBody(macroJson.encodeToString(location)) }
             assertEquals(1, macroJson.decodeFromString<List<MacroRevision>>(history.bodyAsText()).size)
-            val legacy = client.post("/macros/sync") {
-                contentType(ContentType.Application.Json)
-                setBody(buildJsonObject { put("directoryPath", directory.path); put("fileName", "library.json"); put("mode", "refresh") }.toString())
-            }
-            assertEquals(HttpStatusCode.Conflict, legacy.status)
+            assertEquals(HttpStatusCode.NotFound, client.post("/macros/sync").status)
             val bypass = client.post("/files/write") {
                 contentType(ContentType.Application.Json)
                 setBody(buildJsonObject { put("directoryPath", directory.path); put("fileName", "library.json"); put("overwrite", true); put("content", root) }.toString())

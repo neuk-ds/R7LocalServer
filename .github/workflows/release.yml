@@ -43,6 +43,7 @@ jobs:
       - name: Create Windows app zip
         run: |
           New-Item -ItemType Directory -Force -Path dist
+          Copy-Item -Path LICENSE, LICENSE.ru.txt, COPYRIGHT -Destination composeApp/build/compose/binaries/main/app/R7LocalServer
           Compress-Archive `
             -Path composeApp/build/compose/binaries/main/app/R7LocalServer `
             -DestinationPath dist/R7LocalServer-windows.zip `
@@ -100,13 +101,23 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
       - name: Package plugins
         run: |
+          chmod +x ./gradlew
+          ./gradlew :composeApp:packageMacroPlugins
           mkdir -p dist
-          for name in "Macros Sync" "Macros Sync Companion"; do
-            test -f "plugins/${name}/config.json"
-            (cd "plugins/${name}" && zip -r "../../dist/${name}.plugin" .)
-            zip -j "dist/${name}.plugin" LICENSE COPYRIGHT
+          cp composeApp/build/distributions/plugins/*.plugin dist/
+          for archive in dist/*.plugin; do
+            unzip -Z -1 "$archive" | grep -Fxq 'LICENSE'
+            unzip -Z -1 "$archive" | grep -Fxq 'LICENSE.ru.txt'
+            unzip -Z -1 "$archive" | grep -Fxq 'COPYRIGHT'
           done
 
       - name: Upload plugin artifacts

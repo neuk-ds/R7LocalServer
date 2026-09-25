@@ -1,6 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-val applicationVersion = "2.4.4"
+val applicationVersion = "2.5.0"
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info/kotlin")
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -116,7 +116,7 @@ val packageMacrosSyncPlugin by tasks.registering(Zip::class) {
 
 val packageMacrosSyncCompanionPlugin by tasks.registering(Zip::class) {
     group = "distribution"
-    description = "Package the read-only Macros Sync Companion plugin"
+    description = "Package the Macros Sync Companion plugin"
     from(rootProject.file("plugins/Macros Sync Companion"))
     from(rootProject.file("LICENSE"))
     from(rootProject.file("LICENSE.ru.txt"))
