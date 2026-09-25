@@ -83,7 +83,7 @@ async function harness(action = 'push', conflict = false, emptyBook = false, ser
     plugin.init();
     for (let i = 0; i < 20 && body.classList.contains('busy'); i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(body.classList.contains('busy'), false);
-    return { elements, calls, source, plugin, get writes() { return writes; }, get closes() { return closes; },
+    return { elements, calls, source, plugin, settings, get writes() { return writes; }, get closes() { return closes; },
         set rejectOrder(value) { rejectOrder = value; }, get current() { return current; }, set current(value) { current = value; },
         async open() { await elements[action === 'push' ? 'btnSelectCurrent' : 'btnSelectAll'].click(); await elements[action === 'push' ? 'btnPush' : 'btnLoadSelected'].click(); } };
 }
@@ -260,4 +260,15 @@ test('an unavailable server does not leave a new book stuck on loading', async (
     assert.equal(ui.elements.listSaved.children.length, 0);
     assert.match(ui.elements.log.textContent, /Не удалось обратиться к серверу http:\/\/127\.0\.0\.1:8124\/macros\/v2\/state/);
     assert.equal(ui.writes, 0);
+});
+
+test('always update setting enables startup checks and turning checks off clears it', async () => {
+    const ui = await harness();
+    await ui.elements.alwaysUpdate.change(true);
+    assert.equal(ui.elements.autoSync.checked, true);
+    await ui.elements.btnSaveSettings.click();
+    assert.equal(ui.settings.get('macrosSync_alwaysUpdate'), 'true');
+    assert.equal(ui.settings.get('macrosSync_autoSync'), 'true');
+    await ui.elements.autoSync.change(false);
+    assert.equal(ui.elements.alwaysUpdate.checked, false);
 });

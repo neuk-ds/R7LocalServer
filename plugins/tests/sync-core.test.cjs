@@ -118,7 +118,7 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
         addEventListener(name, callback) { this.listeners[name] = callback; }
         click() { return this.listeners.click(); }
     }
-    const elements = Object.fromEntries(['status', 'changes', 'refresh'].map(id => [id, new Element()]));
+    const elements = Object.fromEntries(['status', 'changes', 'refresh', 'applyAll'].map(id => [id, new Element()]));
     const body = { classList: { add() {} } };
     const requests = [], windows = [], messages = [];
     let raw = initial, serverResponse = response, writes = 0, closes = 0, bodyReady = false, context;
@@ -138,7 +138,8 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     };
     const window = {
         location: { href: 'file:///plugins/Macros%20Sync%20Companion/companion.html' },
-        Asc: { plugin, PluginWindow: class {
+        R7SyncCore: core,
+        Asc: { plugin, scope: {}, PluginWindow: class {
             constructor() { this.events = {}; this.id = 'test-window'; }
             attachEvent(name, callback) { this.events[name] = callback; }
             show(variation) { windows.push({ variation, handle: this }); }
@@ -149,12 +150,13 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     context = vm.createContext({
         window, Asc: window.Asc,
         document: { body, getElementById: id => bodyReady && mode === 'window' ? elements[id] : null, createElement: () => new Element() },
-        localStorage: { getItem: key => settings[key] }, console: { warn() {} }, setTimeout, clearTimeout,
-        Api: { pluginMethod_GetMacros: () => raw, pluginMethod_SetMacros: () => { writes++; } },
+        localStorage: { getItem: key => settings[key], setItem: (key, value) => { settings[key] = value; } },
+        console: { warn() {} }, setTimeout, clearTimeout,
+        Api: { pluginMethod_GetMacros: () => raw, pluginMethod_SetMacros: json => { raw = json; writes++; } },
         fetch: async (url, options) => {
             if (mode === 'window') throw new Error('fetch is forbidden in a window frame');
             requests.push({ url, body: JSON.parse(options.body) });
-            return { ok: true, json: async () => serverResponse };
+            return { ok: true, json: async () => typeof serverResponse === 'function' ? serverResponse(url, JSON.parse(options.body)) : serverResponse };
         }
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Macros Sync Companion/companion.js'), 'utf8'), context);
@@ -162,8 +164,8 @@ function companion(initial, settings = { macrosSync_autoSync: 'true', macrosSync
     const instance = {
         plugin, elements, requests, windows, messages, settings,
         emit(name, data) { return windows[0].handle.events[name](data); },
-        set raw(value) { raw = value; }, set response(value) { serverResponse = value; },
-        get writes() { return writes; }, get closes() { return closes; }
+        set response(value) { serverResponse = value; },
+        get writes() { return writes; }, get closes() { return closes; }, get raw() { return raw; }, set raw(value) { raw = value; }
     };
     bridge[mode === 'window' ? 'child' : 'background'] = instance;
     const initialCheck = plugin.init();
@@ -223,6 +225,7 @@ test('window receives the background result without accessing the editor or serv
     assert.equal(child.elements.changes.children[0].children[1].textContent, 'Отличается от библиотеки');
     assert.equal(child.elements.changes.children[1].children[1].textContent, 'Нет в книге');
     assert.equal(child.elements.changes.children[2].children[1].textContent, 'Нет в библиотеке');
+    assert.equal(child.elements.applyAll.disabled, false);
     assert.equal(child.writes, 0);
 });
 
@@ -284,4 +287,111 @@ test('close button closes only the active Companion window', async () => {
     assert.equal(background.closes, 1);
     background.plugin.button(-1, 'test-window');
     assert.equal(background.closes, 1);
+});
+
+test('Apply all loads changed and missing library macros while preserving book-only and excluded macros', async () => {
+    const bridge = {};
+    const original = { macrosArray: [
+        { guid: 'one', name: 'One', value: 'book', isUniversal: true },
+        { guid: 'local', name: 'Local', value: 'local', isUniversal: true },
+        { guid: 'excluded', name: 'Excluded', value: 'mine', isUniversal: true, isExcludedFromAutoSync: true }
+    ] };
+    const saved = { guid: 'one', name: 'One', value: 'library' };
+    const added = { guid: 'saved', name: 'Saved', value: 'new' };
+    const library = { macrosArray: [saved, added, { guid: 'excluded', name: 'Excluded', value: 'library' }] };
+    const next = { macrosArray: [
+        { guid: 'one', name: 'One', value: 'library', isUniversal: true },
+        original.macrosArray[1], original.macrosArray[2],
+        { guid: 'saved', name: 'Saved', value: 'new', isUniversal: true }
+    ] };
+    const background = companion(JSON.stringify(original), undefined, (url, request) => {
+        if (url.endsWith('/state')) return { library };
+        if (url.endsWith('/preview')) {
+            assert.deepEqual(request.selectedGuids, ['one', 'saved']);
+            return { token: 'token', operationId: 'operation', changes: [
+                { guid: 'one', library: saved, result: saved, conflicts: [] },
+                { guid: 'saved', library: added, result: added, conflicts: [] }
+            ] };
+        }
+        assert.match(url, /\/apply$/);
+        assert.deepEqual(request.selectedGuids, ['one', 'saved']);
+        return { document: next, expectedDocument: original, backupPath: 'backup.json', changed: true };
+    }, 'background', bridge);
+    await background.settle();
+    const child = companion(undefined, undefined, undefined, 'window', bridge);
+    await child.settle();
+    await child.elements.applyAll.click();
+    await bridge.pending;
+    assert.equal(background.writes, 1);
+    assert.deepEqual(JSON.parse(background.raw), next);
+    assert.equal(child.elements.changes.children.length, 1);
+    assert.equal(child.elements.changes.children[0].children[1].textContent, 'Нет в библиотеке');
+    assert.equal(child.elements.applyAll.disabled, true);
+    assert.equal(child.elements.refresh.disabled, false);
+});
+
+test('always update applies library code and leaves excluded and missing book macros untouched', async () => {
+    const settings = { macrosSync_autoSync: 'true', macrosSync_alwaysUpdate: 'true',
+        macrosSync_dirPath: 'shared', macrosSync_backupPath: 'backups' };
+    const original = { macrosArray: [
+        { guid: 'one', name: 'One', value: 'book', isUniversal: true },
+        { guid: 'excluded', name: 'Excluded', value: 'mine', isUniversal: true, isExcludedFromAutoSync: true }
+    ] };
+    const saved = { guid: 'one', name: 'One', value: 'library' };
+    const library = { macrosArray: [saved, { guid: 'excluded', name: 'Excluded', value: 'library' },
+        { guid: 'new', name: 'New', value: 'new' }] };
+    const next = { macrosArray: [
+        { guid: 'one', name: 'One', value: 'library', isUniversal: true }, original.macrosArray[1]
+    ] };
+    const ui = companion(JSON.stringify(original), settings, (url, request) => {
+        if (url.endsWith('/state')) return { library };
+        if (url.endsWith('/preview')) {
+            assert.deepEqual(request.selectedGuids, ['one']);
+            assert.equal(request.action, 'pull');
+            return { token: 'token', operationId: 'operation', changes: [
+                { guid: 'one', library: saved, result: saved, conflicts: [] }
+            ] };
+        }
+        assert.match(url, /\/apply$/);
+        assert.deepEqual(request.selectedGuids, ['one']);
+        assert.equal(request.backupDirectory, 'backups');
+        return { document: next, expectedDocument: original, backupPath: 'backups/snapshot.json', changed: true };
+    });
+    await ui.settle();
+    assert.equal(ui.writes, 1);
+    assert.deepEqual(JSON.parse(ui.raw), next);
+    assert.equal(settings.macrosSync_lastBackup, 'backups/snapshot.json');
+    assert.equal(ui.requests.filter(request => request.url.endsWith('/preview')).length, 1);
+    assert.equal(ui.windows.length, 0);
+});
+
+test('always update does not overwrite a book changed after preview', async () => {
+    const original = { macrosArray: [{ guid: 'one', name: 'One', value: 'book' }] };
+    const edited = { macrosArray: [{ guid: 'one', name: 'One', value: 'new local edit' }] };
+    let ui;
+    ui = companion(JSON.stringify(original), { macrosSync_autoSync: 'true', macrosSync_alwaysUpdate: 'true', macrosSync_dirPath: 'shared' },
+        (url) => {
+            if (url.endsWith('/state')) return { library: { macrosArray: [{ guid: 'one', name: 'One', value: 'library' }] } };
+            if (url.endsWith('/preview')) {
+                ui.raw = JSON.stringify(edited);
+                return { token: 'token', operationId: 'operation', changes: [
+                    { guid: 'one', library: { guid: 'one', name: 'One', value: 'library' },
+                        result: { guid: 'one', name: 'One', value: 'library' }, conflicts: [] }
+                ] };
+            }
+            return { document: { macrosArray: [{ guid: 'one', name: 'One', value: 'library' }] },
+                expectedDocument: original, backupPath: 'backup.json', changed: true };
+        });
+    await ui.settle();
+    assert.equal(ui.writes, 0);
+    assert.equal(ui.windows.length, 1);
+    assert.match(ui.windows[0].variation.url, /companion-window\.html$/);
+});
+
+test('always update asks for library settings before reading or writing macros', async () => {
+    const ui = companion(undefined, { macrosSync_alwaysUpdate: 'true' });
+    await ui.settle();
+    assert.equal(ui.requests.length, 0);
+    assert.equal(ui.writes, 0);
+    assert.equal(ui.windows.length, 1);
 });

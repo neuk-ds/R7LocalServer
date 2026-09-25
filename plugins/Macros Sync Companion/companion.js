@@ -4,6 +4,7 @@
     const kinds = { modified: 'Отличается от библиотеки', missingDocument: 'Нет в книге', missingLibrary: 'Нет в библиотеке' };
     const localFields = new Set(['_r7Sync', 'isUniversal', 'isExcludedFromAutoSync', 'isSeparator']);
     const separatorGuid = '00000000-separator-0000-000000000000';
+    const core = window.R7SyncCore;
     let checking = false;
     let isWindow = false;
     let activeWindow = null;
@@ -35,9 +36,9 @@
         });
     }
 
-    // Read-only checker: never calls SetMacros or a write endpoint.
+    // The comparison is read-only; optional updates run after it.
     async function getChanges() {
-        if (localStorage.getItem('macrosSync_autoSync') !== 'true') return null;
+        if (localStorage.getItem('macrosSync_autoSync') !== 'true' && localStorage.getItem('macrosSync_alwaysUpdate') !== 'true') return null;
         const directoryPath = localStorage.getItem('macrosSync_dirPath');
         const fileName = localStorage.getItem('macrosSync_fileName') || 'universal_macros.json';
         const server = localStorage.getItem('macrosSync_serverUrl') || 'http://127.0.0.1:8124';
@@ -77,7 +78,57 @@
             if (current.isUniversal && !current.isExcludedFromAutoSync && !library.has(guid))
                 changed.push({ guid, name: current.name, kind: 'missingLibrary' });
         }
-        return { changed };
+        return { changed, document: macros, library: state.library };
+    }
+
+    async function post(server, path, body) {
+        const url = server.replace(/\/$/, '') + path;
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+        } catch (_) { throw new Error('Нет соединения с ' + url + '. Проверьте сервер и адрес.'); }
+        if (response.status === 404) throw new Error('Обновите R7LocalServer для Macros Sync v2.');
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Ошибка сервера: ' + response.status);
+        return result;
+    }
+
+    async function updateFromLibrary(snapshot, includeMissingDocument = false) {
+        const book = new Map(snapshot.document.macrosArray.filter(isMacro).map(m => [m.guid, m]));
+        const saved = new Map(snapshot.library.macrosArray.filter(isMacro).map(m => [m.guid, m]));
+        const selectedGuids = snapshot.changed.filter(change =>
+            (change.kind === 'modified' || (includeMissingDocument && change.kind === 'missingDocument')) &&
+            (!book.has(change.guid) || !book.get(change.guid).isExcludedFromAutoSync) && saved.has(change.guid))
+            .map(change => change.guid);
+        if (!selectedGuids.length) return false;
+        const current = await core.read(window.Asc.plugin);
+        if (core.canonical(current) !== core.canonical(snapshot.document))
+            throw new Error('Документ изменился во время проверки. Повторите проверку.');
+        const directoryPath = localStorage.getItem('macrosSync_dirPath');
+        const fileName = localStorage.getItem('macrosSync_fileName') || 'universal_macros.json';
+        const server = localStorage.getItem('macrosSync_serverUrl') || 'http://127.0.0.1:8124';
+        const preview = await post(server, '/macros/v2/preview', {
+            directoryPath, fileName, action: 'pull', document: snapshot.document, selectedGuids
+        });
+        if (!Array.isArray(preview.changes) || preview.changes.length !== selectedGuids.length ||
+            preview.changes.some(change => !selectedGuids.includes(change.guid) || !change.result ||
+                (change.conflicts || []).length ||
+                core.canonical(change.library) !== core.canonical(comparable(saved.get(change.guid)))))
+            throw new Error('Библиотека изменилась во время проверки. Повторите проверку.');
+        const result = await post(server, '/macros/v2/apply', {
+            directoryPath, fileName, token: preview.token, operationId: preview.operationId,
+            selectedGuids, resolutions: {}, comment: '',
+            backupDirectory: localStorage.getItem('macrosSync_backupPath') || ''
+        });
+        if (!result.document || !result.expectedDocument || !result.backupPath)
+            throw new Error('Сервер не подготовил документ и резервную копию.');
+        if (core.canonical(result.expectedDocument) !== core.canonical(snapshot.document))
+            throw new Error('Сервер вернул другой исходный документ.');
+        localStorage.setItem('macrosSync_lastBackup', result.backupPath);
+        await core.apply(window.Asc.plugin, window.Asc.scope, result.expectedDocument, result.document);
+        return true;
     }
 
     function showWindow() {
@@ -87,6 +138,7 @@
             if (activeWindow === pluginWindow && latestResult) sendResult();
         });
         pluginWindow.attachEvent('companionRefresh', () => check());
+        pluginWindow.attachEvent('companionApplyAll', () => check(true));
         pluginWindow.show({
             url: window.location.href.replace(/[^/]*$/, 'companion-window.html'),
             description: 'Проверка макросов',
@@ -117,6 +169,7 @@
             $('status').textContent = result.message;
             $('status').dataset.state = result.state;
             $('refresh').disabled = false;
+            $('applyAll').disabled = true;
             return;
         }
         for (const change of result.changed) {
@@ -132,17 +185,23 @@
         $('status').textContent = 'Найдены отличия: ' + result.changed.length;
         $('status').dataset.state = 'changes';
         $('refresh').disabled = false;
+        $('applyAll').disabled = !result.changed.some(change => change.kind === 'modified' || change.kind === 'missingDocument');
     }
 
-    async function check() {
+    async function check(applyAll = false) {
         if (checking) return;
         checking = true;
         let result;
         try {
             result = await getChanges();
+            if (result && Array.isArray(result.changed) &&
+                (applyAll || localStorage.getItem('macrosSync_alwaysUpdate') === 'true') &&
+                await updateFromLibrary(result, applyAll))
+                result = await getChanges();
+            if (result && Array.isArray(result.changed)) result = { changed: result.changed };
         } catch (error) {
             console.warn('[Macros Sync Companion]', error);
-            result = { message: 'Проверка не удалась: ' + error.message, state: 'error' };
+            result = { message: (applyAll ? 'Применение не удалось: ' : 'Проверка не удалась: ') + error.message, state: 'error' };
         }
         try {
             latestResult = result;
@@ -166,9 +225,17 @@
             window.Asc.plugin.event_companionResult = data => render(JSON.parse(data));
             $('refresh').addEventListener('click', () => {
                 $('refresh').disabled = true;
+                $('applyAll').disabled = true;
                 $('status').textContent = 'Проверка обновлений…';
                 $('status').dataset.state = 'checking';
                 window.Asc.plugin.sendToPlugin('companionRefresh', {});
+            });
+            $('applyAll').addEventListener('click', () => {
+                $('refresh').disabled = true;
+                $('applyAll').disabled = true;
+                $('status').textContent = 'Применение макросов из библиотеки…';
+                $('status').dataset.state = 'checking';
+                window.Asc.plugin.sendToPlugin('companionApplyAll', {});
             });
             window.Asc.plugin.sendToPlugin('companionReady', {});
             return;

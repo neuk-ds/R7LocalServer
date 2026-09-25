@@ -27,7 +27,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=..\src\jvmMain\composeResources\files\icon.ico
-LicenseFile=..\..\LICENSE
+LicenseFile=..\..\LICENSE.ru.txt
 UninstallDisplayIcon={app}\{#AppExeName}
 VersionInfoVersion={#AppVersion}
 UninstallDisplayName={#AppName}
@@ -41,14 +41,17 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 [Files]
 Source: "{#AppSourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\LICENSE.ru.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\COPYRIGHT"; DestDir: "{app}"; Flags: ignoreversion
-; R7 Office registers plugins itself. Update only folders that already exist.
-Source: "{#PluginsSourceDir}\Macros Sync\*"; DestDir: "{#MacrosSyncDir}"; Flags: recursesubdirs createallsubdirs ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncDir}'))
-Source: "{#PluginsSourceDir}\Macros Sync Companion\*"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: recursesubdirs createallsubdirs ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncCompanionDir}'))
-Source: "..\..\LICENSE"; DestDir: "{#MacrosSyncDir}"; Flags: ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncDir}'))
-Source: "..\..\LICENSE"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncCompanionDir}'))
-Source: "..\..\COPYRIGHT"; DestDir: "{#MacrosSyncDir}"; Flags: ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncDir}'))
-Source: "..\..\COPYRIGHT"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: ignoreversion uninsneveruninstall; Check: DirExists(ExpandConstant('{#MacrosSyncCompanionDir}'))
+; Install or update both plugins in the current user's R7 Office plugin directory.
+Source: "{#PluginsSourceDir}\Macros Sync\*"; DestDir: "{#MacrosSyncDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#PluginsSourceDir}\Macros Sync Companion\*"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\..\LICENSE"; DestDir: "{#MacrosSyncDir}"; Flags: ignoreversion
+Source: "..\..\LICENSE"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: ignoreversion
+Source: "..\..\LICENSE.ru.txt"; DestDir: "{#MacrosSyncDir}"; Flags: ignoreversion
+Source: "..\..\LICENSE.ru.txt"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: ignoreversion
+Source: "..\..\COPYRIGHT"; DestDir: "{#MacrosSyncDir}"; Flags: ignoreversion
+Source: "..\..\COPYRIGHT"; DestDir: "{#MacrosSyncCompanionDir}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
@@ -66,6 +69,10 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\runtime"
 Type: files; Name: "{app}\R7LocalServer.exe"
 Type: files; Name: "{#MacrosSyncDir}\sync-core.js"
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{#MacrosSyncDir}"
+Type: filesandordirs; Name: "{#MacrosSyncCompanionDir}"
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Запустить {#AppName}"; Flags: nowait postinstall skipifsilent

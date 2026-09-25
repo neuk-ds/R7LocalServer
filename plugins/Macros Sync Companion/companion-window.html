@@ -12,11 +12,14 @@
     <main>
         <header>
             <h1>Проверка макросов</h1>
-            <button id="refresh" type="button">Проверить</button>
+            <div class="actions">
+                <button id="refresh" type="button">Проверить</button>
+                <button id="applyAll" type="button" disabled>Применить все</button>
+            </div>
         </header>
         <p id="status" role="status" aria-live="polite">Ожидание проверки…</p>
         <ul id="changes" aria-label="Изменённые макросы"></ul>
-        <p class="hint">Для просмотра и применения изменений откройте «Синхронизация макросов».</p>
+        <p class="hint">Кнопка применяет версии из библиотеки. Макросы, которых в библиотеке нет, остаются в книге. Для выбора отдельных изменений откройте «Синхронизация макросов».</p>
         <footer class="developer-footer">Разработчик: Дмитрий Неук · <a href="mailto:neukds@yandex.ru">neukds@yandex.ru</a></footer>
     </main>
 </body>

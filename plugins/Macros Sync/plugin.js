@@ -191,11 +191,21 @@
     window.Asc.plugin.init = function () {
         for (const [key, fallback] of Object.entries(settings)) $(key).value = localStorage.getItem('macrosSync_' + key) || fallback;
         $('autoSync').checked = localStorage.getItem('macrosSync_autoSync') === 'true';
+        $('alwaysUpdate').checked = localStorage.getItem('macrosSync_alwaysUpdate') === 'true';
+        if ($('alwaysUpdate').checked) $('autoSync').checked = true;
         if ((localStorage.getItem('ui-theme') || '').includes('dark')) document.body.classList.add('dark');
         const bind = (id, fn) => $(id).addEventListener('click', () => run(fn));
         bind('btnSaveSettings', () => {
             for (const key of Object.keys(settings)) localStorage.setItem('macrosSync_' + key, $(key).value.trim());
-            localStorage.setItem('macrosSync_autoSync', String($('autoSync').checked)); log('Настройки сохранены');
+            localStorage.setItem('macrosSync_autoSync', String($('autoSync').checked));
+            localStorage.setItem('macrosSync_alwaysUpdate', String($('alwaysUpdate').checked));
+            log('Настройки сохранены');
+        });
+        $('alwaysUpdate').addEventListener('change', () => {
+            if ($('alwaysUpdate').checked) $('autoSync').checked = true;
+        });
+        $('autoSync').addEventListener('change', () => {
+            if (!$('autoSync').checked) $('alwaysUpdate').checked = false;
         });
         bind('btnRefresh', refresh);
         bind('btnSaveOrder', saveOrder);
